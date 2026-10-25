@@ -362,6 +362,23 @@ body.locked{overflow:hidden}body.locked .fab,body.locked nav.tabs{visibility:hid
 .sec>*{min-width:0}
 .vh{position:absolute!important;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 label.pick.add,label.btn{position:relative;cursor:pointer}
+.kbtn{border:1px solid rgba(255,170,240,.28);text-align:left;cursor:pointer;font:inherit;color:inherit}
+.grpbtn{border:0;background:none;width:100%;text-align:left;padding:4px 0;cursor:pointer;font:inherit;color:inherit;display:grid;gap:6px}
+.clickrow{cursor:pointer}.clickrow:hover td,.clickrow:active td{background:rgba(255,255,255,.06)}
+.go{color:var(--accent);font-weight:700}
+.edit-ic{color:var(--muted);font-size:13px;opacity:.7;flex:none}
+.hist{margin-top:18px}
+.rv{border:1px solid var(--line);border-radius:14px;padding:10px;display:grid;gap:8px;background:rgba(0,0,0,.15)}.rv.off{opacity:.45}
+.rvh b{font-weight:600;font-size:14px}
+.rvg{display:grid;grid-template-columns:1fr 1.4fr;gap:6px}.rvg>*{min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px;background:rgba(0,0,0,.25);color:var(--ink)}
+.scan-in{background:linear-gradient(180deg,#8CF7D4,#3FD3A3)!important;color:#0E3B2E!important;box-shadow:0 3px 0 #1F8E6B,0 6px 14px rgba(63,211,163,.35)!important}
+details.rawtxt{font-size:12px;color:var(--muted)}details.rawtxt pre{white-space:pre-wrap;max-height:160px;overflow:auto;background:rgba(0,0,0,.25);padding:8px;border-radius:8px;margin:4px 0 0}
+.savebtn{position:relative;border:1px solid rgba(255,170,240,.3);background:linear-gradient(180deg,#4A3596,#2A1A62);color:var(--ink);width:38px;height:38px;border-radius:50%;display:grid;place-items:center;cursor:pointer;flex:none}
+.savebtn svg{width:19px;height:19px}.savebtn.saved{box-shadow:0 0 0 3px rgba(111,243,198,.45);color:var(--good)}.savebtn.upd{box-shadow:0 0 0 2px var(--warn)}
+#saveDot{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid #1B0F45;background:var(--good)}#saveDot.warn{background:var(--warn)}
+.okic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--sprout-soft);color:var(--good);font-weight:700;flex:none}.okic.warn{background:var(--sun-soft);color:var(--warn)}
+#updBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top,0px));z-index:70;display:flex;gap:10px;align-items:center;background:linear-gradient(180deg,#3A2780,#2A1A62);border:1px solid var(--warn);border-radius:14px;padding:8px 12px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);white-space:nowrap}
+@media (max-width:420px){.brand{font-size:15px}.monthsw span{min-width:56px}}
 </style>
 </head><body>
 <div id="sky" aria-hidden="true"></div>
@@ -2169,6 +2186,34 @@ Object.assign(A,{ocrRetry:()=>{if(S.lastFiles)ocrSlips(S.lastFiles)}});
 document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id!=='scanOut')return;const f=[...e.target.files];e.target.value='';scanWith(f,id==='scanIn'?'in':'out')});
 /* Claude path: force mode on results too */
 {const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
+/* ========== save indicator + in-app version update ========== */
+const APP_V=19;
+{const h=$('.top-in');if(h&&!$('#saveBtn'))$('#bell').insertAdjacentHTML('beforebegin',`<button class="savebtn" id="saveBtn" data-act="saveInfo" aria-label="สถานะการบันทึก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><i id="saveDot"></i></button>`)}
+let lastSave=Date.now(),saveFlash;
+function markSaved(){lastSave=Date.now();const b=$('#saveBtn');if(!b)return;b.classList.remove('saved');void b.offsetWidth;b.classList.add('saved');clearTimeout(saveFlash);saveFlash=setTimeout(()=>b.classList.remove('saved'),1600);updSaveDot()}
+function backupAge(){const t=S.meta?.lastBackup;return t?Math.floor((Date.now()-new Date(t))/864e5):null}
+function updSaveDot(){const d=$('#saveDot');if(!d)return;const a=backupAge();d.className=a===null||a>30?'warn':'ok';const u=$('#saveBtn');if(u)u.classList.toggle('upd',!!S.newVer)}
+{const b1=dbPut,b2=dbDel,b3=dbBulk;const k=s=>s!=='meta'||true;dbPut=async function(s,o){const r=await b1(s,o);markSaved();return r};dbDel=async function(s,id){const r=await b2(s,id);markSaved();return r};dbBulk=async function(s,a){const r=await b3(s,a);markSaved();return r}}
+{const old=A.backup;A.backup=async function(){await old();S.meta.lastBackup=new Date().toISOString();await saveMeta();updSaveDot()}}
+const fmtAgo=t=>{const s=Math.round((Date.now()-t)/1000);return s<60?'เมื่อสักครู่':s<3600?Math.round(s/60)+' นาทีที่แล้ว':new Date(t).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'})};
+const IS_WEB=!window.claude&&/^https?:/.test(location.protocol);
+async function checkUpdate(manual){if(!IS_WEB){if(manual)toast('ในแอป Claude อัปเดตให้อัตโนมัติ เปิดใหม่ก็ได้ตัวล่าสุด');return}
+  try{const r=await fetch(location.pathname+'?v='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/const APP_V=(\d+);/);const v=m?+m[1]:0;
+    if(v>APP_V){S.newVer=v;updSaveDot();showUpdBar(v)}else{S.newVer=0;updSaveDot();if(manual)toast(`ใช้เวอร์ชันล่าสุดแล้ว (v${APP_V})`)}}catch(e){if(manual)toast('เช็กไม่ได้ ต้องต่ออินเทอร์เน็ต')}}
+function showUpdBar(v){if($('#updBar'))return;document.body.insertAdjacentHTML('beforeend',`<div id="updBar"><span>มีเวอร์ชันใหม่ v${v}</span><button class="btn sm green" data-act="doUpdate">อัปเดตเลย</button><button class="linkbtn" data-act="hideUpd">ไว้ทีหลัง</button></div>`)}
+async function doUpdate(){toast('กำลังอัปเดต…');try{const reg=await navigator.serviceWorker?.getRegistration();if(reg){await reg.update();reg.waiting?.postMessage?.('skip')}
+  if(window.caches){for(const k of await caches.keys())await caches.delete(k)}}catch(_){}location.replace(location.pathname+'?updated='+Date.now())}
+Object.assign(A,{
+  saveInfo:()=>{const a=backupAge();openSheet(`<h2>การบันทึกข้อมูล</h2><div class="stack small">
+    <div class="card row" style="box-shadow:none"><span class="okic">✓</span><span class="grow"><b>บันทึกอัตโนมัติในเครื่องนี้</b><br><span class="muted">ล่าสุด ${fmtAgo(lastSave)} · ทุกครั้งที่กดบันทึกรายการ ข้อมูลจะถูกเก็บทันที ไม่ต้องกดเซฟเอง</span></span></div>
+    <div class="card row" style="box-shadow:none"><span class="okic ${a===null||a>30?'warn':''}">${a===null||a>30?'!':'✓'}</span><span class="grow"><b>ไฟล์สำรอง</b><br><span class="muted">${a===null?'ยังไม่เคยสำรอง':a===0?'สำรองวันนี้แล้ว':'สำรองล่าสุด '+a+' วันที่แล้ว'} · ควรสำรองเดือนละครั้ง กันข้อมูลหายตอนล้างเครื่องหรือเปลี่ยนมือถือ</span></span></div>
+    <button class="btn green" data-act="backup">สำรองข้อมูลตอนนี้ (.zip)</button>
+    <div class="card row" style="box-shadow:none"><span class="okic ${S.newVer?'warn':''}">${S.newVer?'↑':'✓'}</span><span class="grow"><b>เวอร์ชันแอป v${APP_V}</b><br><span class="muted">${S.newVer?'มีเวอร์ชันใหม่ v'+S.newVer:IS_WEB?'แตะเช็กว่ามีตัวใหม่หรือไม่':'ในแอป Claude อัปเดตอัตโนมัติ'}</span></span></div>
+    ${IS_WEB?`<button class="btn ${S.newVer?'green':'soft'}" data-act="${S.newVer?'doUpdate':'checkUpd'}">${S.newVer?'อัปเดตเป็น v'+S.newVer:'เช็กเวอร์ชันใหม่'}</button>`:''}
+    <p class="hint" style="margin:0">อัปเดตเวอร์ชันไม่ลบข้อมูล รายการ หนี้ และตั้งค่าทั้งหมดยังอยู่ครบ</p></div><div class="actions"><span></span><button class="btn soft" data-act="closeSheet">ปิด</button></div>`)},
+  checkUpd:()=>checkUpdate(true),doUpdate:()=>doUpdate(),hideUpd:()=>$('#updBar')?.remove()});
+setTimeout(()=>{updSaveDot();checkUpdate(false)},2500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate(false)});
+{const old=slipCard;slipCard=function(){return old().replace(/v1\d · 25 ต\.ค\. 69/,'v'+APP_V)}}
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
