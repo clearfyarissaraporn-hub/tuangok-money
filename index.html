@@ -2169,11 +2169,11 @@ ocrSlips=async function(files,append){const st=$('#slipStatus');const say=(t,ret
   try{T=await loadTess()}catch(e){say('โหลดตัวอ่านไม่ได้ ('+(e.message||'network')+') เช็กอินเทอร์เน็ตแล้วกด',true);return}
   const rows=[],raws=[];
   for(let i=0;i<files.length;i++){say(`กำลังอ่านรูปที่ ${i+1}/${files.length}…`);
-    try{const w=await getWorker(T,say);const{data}=await w.recognize(await prepImage(files[i]));const txt=data.text||'';const p=forceMode(parseOCR(txt));p.raw=txt;
+    try{const w=await getWorker(T,say);const{data}=await w.recognize(await prepImage(files[i]));const txt=data.text||'';const p=forceMode(parseOCR(txt));p.raw=txt;p.file=files[i];
       if(!p.amount){p.amount=0;p.label='อ่านยอดไม่ได้ ใส่ยอดเอง · '+(p.label||'')}rows.push(p);raws.push(txt)}
     catch(e){try{await OCRW?.terminate()}catch(_){}OCRW=null;say('อ่านรูปที่ '+(i+1)+' ไม่สำเร็จ ('+(e?.message||e)+')',true);if(!rows.length)return}}
   say('');
-  const add=rows.map(x=>({on:true,type:x.type,cat:x.cat||(x.type==='in'?'otherin':'other'),amount:x.amount,date:x.date,label:x.label,debt_name:x.debt_name,raw:x.raw,
+  const add=rows.map(x=>({on:true,type:x.type,cat:x.cat||(x.type==='in'?'otherin':'other'),amount:x.amount,date:x.date,label:x.label,debt_name:x.debt_name,raw:x.raw,file:x.file,
     debt:x.type==='debt_balance'?(S.debts.find(d=>/pay\s*later/i.test(d.name+d.kind))?.id||'__new'):x.type==='card_balance'?(S.cards.length===1?S.cards[0].id:'__new'):undefined}));
   RV=append?[...RV,...add]:add;await markDups();const miss=add.filter(r=>!r.amount).length;
   drawReview([{doc_type:'other',title:`${S.scanMode==='in'?'สแกนรายรับ':'สแกนรายจ่าย'} ${rows.length} รูป${miss?` · ${miss} รูปต้องใส่ยอดเอง`:''}`,note:'ตรวจยอด วันที่ และหมวดก่อนบันทึก'}])}
@@ -2187,7 +2187,7 @@ document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id
 /* Claude path: force mode on results too */
 {const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
 /* ========== save indicator + in-app version update ========== */
-const APP_V=19;
+const APP_V=20;
 {const h=$('.top-in');if(h&&!$('#saveBtn'))$('#bell').insertAdjacentHTML('beforebegin',`<button class="savebtn" id="saveBtn" data-act="saveInfo" aria-label="สถานะการบันทึก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><i id="saveDot"></i></button>`)}
 let lastSave=Date.now(),saveFlash;
 function markSaved(){lastSave=Date.now();const b=$('#saveBtn');if(!b)return;b.classList.remove('saved');void b.offsetWidth;b.classList.add('saved');clearTimeout(saveFlash);saveFlash=setTimeout(()=>b.classList.remove('saved'),1600);updSaveDot()}
@@ -2214,6 +2214,26 @@ Object.assign(A,{
   checkUpd:()=>checkUpdate(true),doUpdate:()=>doUpdate(),hideUpd:()=>$('#updBar')?.remove()});
 setTimeout(()=>{updSaveDot();checkUpdate(false)},2500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate(false)});
 {const old=slipCard;slipCard=function(){return old().replace(/v1\d · 25 ต\.ค\. 69/,'v'+APP_V)}}
+/* ========== v20: second OCR pass (English digits) + save always picks up typed values ========== */
+let OCRE=null;
+async function getEngWorker(T){if(OCRE)return OCRE;OCRE=await T.createWorker('eng',1);return OCRE}
+{const prev=parseOCR;parseOCR=function(raw){return prev(raw)}}
+ocrSlips=(function(base){return async function(files,append){
+  // wrap the Thai pass; afterwards re-read rows that came back without an amount using the English model
+  await base(files,append);
+  const need=RV.map((r,i)=>[r,i]).filter(([r])=>r.raw!==undefined&&!num(r.amount));if(!need.length||!window.Tesseract)return;
+  const st=$('#rvStatus');if(st)st.textContent='อ่านตัวเลขซ้ำอีกรอบ…';
+  try{const w=await getEngWorker(window.Tesseract);for(const[r] of need){const f=r.file;if(!f)continue;
+      for(const img of [f,await prepImage(f)]){const{data}=await w.recognize(img);const p=forceMode(parseOCR(data.text||''));if(p.amount){r.amount=p.amount;r.label=r.label.replace(/^อ่านยอดไม่ได้ ใส่ยอดเอง · /,'');if(r.date===todayStr()&&p.date)r.date=p.date;if(r.cat==='other'&&p.cat)r.cat=p.cat;r.raw+='\n--- อ่านรอบ 2 ---\n'+data.text;break}}}}
+  catch(e){}if(st)st.textContent='';drawReview([{doc_type:'other',title:'อ่านรูปแล้ว',note:'ตรวจยอด วันที่ และหมวดก่อนบันทึก'}])}})(ocrSlips);
+/* read every field straight from the screen before saving (fixes typed amount not being saved) */
+function syncReviewFromDom(){document.querySelectorAll('#rvList .rv').forEach(w=>{const r=RV[+w.dataset.i];if(!r)return;
+  w.querySelectorAll('[data-rv]').forEach(el=>{const k=el.dataset.rv;if(k==='on')r.on=el.checked;else if(k==='amount')r.amount=num(el.value);else if(k!=='type')r[k]=el.value})})}
+document.addEventListener('input',e=>{const el=e.target;if(!el.closest||!el.closest('#rvList')||el.dataset.rv!=='amount')return;const w=el.closest('.rv');const r=RV[+w.dataset.i];if(r)r.amount=num(el.value)});
+{const old=saveReview;saveReview=async function(){syncReviewFromDom();const rows=RV.filter(r=>r.on&&!/_balance$/.test(r.type));const first=rows[0];
+  const n=RV.filter(r=>r.on).length;await old();
+  if(first&&!$('#sheetRoot .sheet')){const d=parse(first.date);if(d.getFullYear()!==S.y||d.getMonth()!==S.m){S.y=d.getFullYear();S.m=d.getMonth();await loadMonth()}
+    S.tab='list';S.sub.list='list';S.listFilter='all';render();window.scrollTo(0,0);toast(`บันทึกแล้ว ${n} รายการ · ${fmtMonth(S.y,S.m)}`)}}}
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
