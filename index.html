@@ -1887,10 +1887,10 @@ let SMP;async function getSample(){if(SMP===undefined){try{SMP=window.claude?.us
 async function canReadImages(){const s=await getSample();if(!s)return false;try{const l=await s.limits();return!!l?.images}catch(e){return false}}
 const OUTKEYS=CATDEF.out.map(c=>c[0]+'='+c[1]).join(', '),INKEYS=CATDEF.in.map(c=>c[0]+'='+c[1]).join(', ');
 function slipPrompt(){const debts=S.debts.map(d=>d.name).concat(S.cards.map(c=>c.name)).join(', ')||'ไม่มี';
-return`รูปที่แนบเป็นเอกสารการเงินของผู้ใช้ชาวไทย (อาจเป็นสลิปเงินเดือน, สลิปโอนเงิน, รายงานยอดขายร้านเช่น Loyverse, รายงานค่าคอม Affiliate, หรือบิล Pay Later/บัตรเครดิต) อ่านทุกรูปแล้วแปลงเป็นรายการบันทึกบัญชี
+return`รูปที่แนบเป็นเอกสารการเงินของผู้ใช้ชาวไทย (อาจเป็นสลิปเงินเดือน, สลิปโอนเงิน, รายงานยอดขายร้านเช่น Loyverse, รายงานค่าคอม Affiliate, ใบเสร็จ/สลิปจ่ายเงิน, บิลค่าน้ำ ค่าไฟ ค่าเน็ต ค่าโทรศัพท์ ค่าเช่า ค่าผ่อนบ้าน/รถ, สเตทเมนต์บัตรเครดิต, หรือบิล Pay Later) อ่านทุกรูปแล้วแปลงเป็นรายการบันทึกบัญชี
 ตอบเป็น JSON อย่างเดียว รูปแบบ:
-{"docs":[{"doc_type":"payslip|transfer|shop_sales|affiliate|bill|other","title":"สั้นๆ","note":"ข้อสังเกตสั้นๆ"}],
- "items":[{"type":"in|out|debt_balance","cat":"รหัสหมวด","amount":ตัวเลข,"date":"YYYY-MM-DD","label":"คำอธิบายสั้น","debt_name":"เฉพาะ debt_balance"}]}
+{"docs":[{"doc_type":"payslip|receipt|utility|rent|card_statement|transfer|shop_sales|affiliate|bill|other","title":"สั้นๆ","note":"ข้อสังเกตสั้นๆ"}],
+ "items":[{"type":"in|out|debt_balance|card_balance","cat":"รหัสหมวด","amount":ตัวเลข,"date":"YYYY-MM-DD","label":"คำอธิบายสั้น","debt_name":"เฉพาะ debt_balance","card_name":"เฉพาะ card_balance"}]}
 หมวดรายรับ: ${INKEYS}
 หมวดรายจ่าย: ${OUTKEYS}
 กฎ:
@@ -1899,7 +1899,10 @@ return`รูปที่แนบเป็นเอกสารการเง�
 - รายงานยอดขายร้าน: ลง 1 รายการ type in cat shop เป็น "กำไรขั้นต้น" (Gross profit) ถ้าไม่มีให้ใช้ยอดขายสุทธิ label ใส่ช่วงวันที่และยอดขายสุทธิ วันที่ใช้วันสุดท้ายของช่วง
 - Affiliate/ค่าคอม: type in cat affiliate
 - บิลที่ยังต้องจ่าย (ยอดค้าง/ยอดบิล): type debt_balance amount=ยอดที่ต้องจ่ายทั้งหมด debt_name=ชื่อผู้ให้บริการ (หนี้ที่ผู้ใช้มีอยู่: ${debts}) ถ้าระบุวันที่ครบกำหนดให้ใส่ใน date
-- สลิปโอนเงิน/จ่ายเงิน: type out เลือกหมวดที่ใกล้ที่สุดจากชื่อผู้รับ
+- ใบเสร็จ/สลิปจ่ายเงิน/สลิปโอน: type out 1 รายการต่อรูป ใช้ยอดรวมที่จ่ายจริง เลือกหมวดจากชื่อร้าน/ผู้รับ (ไฟฟ้า กฟภ. กฟน. PEA MEA หรือประปา=util, AIS True dtac NT เน็ต=phone, ค่าเช่า หอ คอนโด ค่าส่วนกลาง=rent, ร้านอาหาร=food, Grab น้ำมัน BTS=travel, Shopee Lazada ห้าง=shop, ร้านยา โรงพยาบาล=health, 7-Eleven Lotus Makro=house)
+- บิลค่าน้ำ ค่าไฟ ค่าเน็ต ที่ยังไม่จ่าย: type out cat util/phone ยอดที่ต้องชำระ วันที่ใช้วันครบกำหนด label ใส่ "ยอดบิล" และเดือนของบิล
+- ค่าผ่อนบ้าน/รถ/สินเชื่อ: type out cat loan label ใส่ชื่อสินเชื่อ (หนี้ที่ผู้ใช้มีอยู่: ${debts})
+- สเตทเมนต์บัตรเครดิต: type card_balance amount=ยอดที่ต้องชำระทั้งหมด card_name=ชื่อบัตร/ธนาคาร date=วันครบกำหนดชำระ label ใส่ยอดขั้นต่ำ อย่าแตกรายการรูดแต่ละรายการ
 - ปี พ.ศ. ให้แปลงเป็น ค.ศ. วันที่รูปแบบ DD/MM/YYYY คือวัน/เดือน/ปี ถ้าไม่มีวันที่ใช้ ${todayStr()}
 - ห้ามใส่ชื่อคน เลขบัญชี เลขพนักงาน หรือข้อมูลระบุตัวตนลงใน label/note
 - amount เป็นตัวเลขไม่มีคอมมา`}
@@ -1910,14 +1913,14 @@ async function readSlips(files){const s=await getSample();const imgs=[...files].
 /* review sheet */
 let RV=[];
 function rvRow(r,i){const isD=r.type==='debt_balance';const cats=r.type==='in'?CATDEF.in:CATDEF.out;
-  const debtOpts=[...S.debts.map(d=>[d.id,d.name]),['__new','+ สร้างหนี้ใหม่']];
+  const isC=r.type==='card_balance';const debtOpts=isC?[...S.cards.map(c=>[c.id,c.name]),['__new','+ สร้างบัตรใหม่']]:[...S.debts.map(d=>[d.id,d.name]),['__new','+ สร้างหนี้ใหม่']];
   return`<div class="rv ${r.on?'':'off'}" data-i="${i}"><label class="chk rvh"><input type="checkbox" data-rv="on" ${r.on?'checked':''}><b>${esc(r.label||'')}</b></label>
-  ${isD?`<div class="two"><label class="fld"><span>อัปเดตยอดหนี้</span><select data-rv="debt">${debtOpts.map(([v,l])=>`<option value="${v}" ${r.debt===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label><label class="fld"><span>ยอดค้างใหม่</span><input data-rv="amount" inputmode="decimal" class="num" value="${r.amount}"></label></div>${r.debt==='__new'?`<label class="fld"><span>ชื่อหนี้ใหม่</span><input data-rv="debt_name" value="${esc(r.debt_name||'')}"></label>`:''}`
+  ${isD||isC?`<div class="two"><label class="fld"><span>${isC?'อัปเดตยอดบัตร':'อัปเดตยอดหนี้'}</span><select data-rv="debt">${debtOpts.map(([v,l])=>`<option value="${v}" ${r.debt===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label><label class="fld"><span>ยอดค้างใหม่</span><input data-rv="amount" inputmode="decimal" class="num" value="${r.amount}"></label></div>${r.debt==='__new'?`<label class="fld"><span>${isC?'ชื่อบัตรใหม่':'ชื่อหนี้ใหม่'}</span><input data-rv="debt_name" value="${esc(r.debt_name||'')}"></label>`:''}`
   :`<div class="rvg"><select data-rv="type"><option value="in" ${r.type==='in'?'selected':''}>รายรับ</option><option value="out" ${r.type==='out'?'selected':''}>รายจ่าย</option></select><select data-rv="cat">${cats.map(([k,l])=>`<option value="${k}" ${r.cat===k?'selected':''}>${esc(l)}</option>`).join('')}</select><input data-rv="amount" inputmode="decimal" class="num" value="${r.amount}"><input type="date" data-rv="date" value="${r.date}"></div>${r.dup?'<span class="small" style="color:var(--warn)">อาจซ้ำกับรายการที่มีอยู่แล้ว</span>':''}`}</div>`}
-async function markDups(){const all=await dbAll('tx');RV.forEach(r=>{r.dup=r.type!=='debt_balance'&&all.some(t=>t.date===r.date&&Math.abs(num(t.amount)-Math.abs(r.amount))<0.01&&t.cat===r.cat);if(r.dup)r.on=false})}
-function rvTotals(){const a=RV.filter(r=>r.on&&r.type!=='debt_balance');const inc=sum(a.filter(r=>r.type==='in'),r=>+r.amount),out=sum(a.filter(r=>r.type==='out'),r=>+r.amount);return{inc,out,net:inc-out}}
+async function markDups(){const all=await dbAll('tx');RV.forEach(r=>{r.dup=!/_balance$/.test(r.type)&&all.some(t=>t.date===r.date&&Math.abs(num(t.amount)-Math.abs(r.amount))<0.01&&t.cat===r.cat);if(r.dup)r.on=false})}
+function rvTotals(){const a=RV.filter(r=>r.on&&!/_balance$/.test(r.type));const inc=sum(a.filter(r=>r.type==='in'),r=>+r.amount),out=sum(a.filter(r=>r.type==='out'),r=>+r.amount);return{inc,out,net:inc-out}}
 function drawReview(docs){const T=rvTotals();
-  openSheet(`<h2>ตรวจก่อนบันทึก</h2>${(docs||[]).map(d=>`<div class="small"><span class="chip">${esc({payslip:'สลิปเงินเดือน',transfer:'สลิปโอน',shop_sales:'ยอดขายร้าน',affiliate:'Affiliate',bill:'บิล',other:'เอกสาร'}[d.doc_type]||'เอกสาร')}</span> ${esc(d.title||'')}${d.note?` <span class="muted">· ${esc(d.note)}</span>`:''}</div>`).join('')}
+  openSheet(`<h2>ตรวจก่อนบันทึก</h2>${(docs||[]).map(d=>`<div class="small"><span class="chip">${esc({payslip:'สลิปเงินเดือน',receipt:'ใบเสร็จ',utility:'บิลค่าน้ำ/ไฟ/เน็ต',rent:'ค่าเช่า/ผ่อน',card_statement:'บัตรเครดิต',transfer:'สลิปโอน',shop_sales:'ยอดขายร้าน',affiliate:'Affiliate',bill:'บิล',other:'เอกสาร'}[d.doc_type]||'เอกสาร')}</span> ${esc(d.title||'')}${d.note?` <span class="muted">· ${esc(d.note)}</span>`:''}</div>`).join('')}
   <div id="rvList" class="stack" style="margin-top:8px">${RV.map(rvRow).join('')}</div>
   <div class="kpis" style="margin-top:10px"><div class="kpi"><div class="l">รายรับ</div><div class="v num" style="color:var(--good)" id="rvI">${baht(T.inc)}</div></div><div class="kpi"><div class="l">รายจ่าย/หัก</div><div class="v num" id="rvO">${baht(T.out)}</div></div><div class="kpi"><div class="l">สุทธิ</div><div class="v num" id="rvN">${baht(T.net)}</div></div></div>
   <p class="hint">เทียบยอดสุทธิกับเงินที่เข้าบัญชีจริงก่อนบันทึก แก้หมวด จำนวน หรือวันที่ได้ ติ๊กออกรายการที่ไม่ต้องการ</p>
@@ -1929,6 +1932,9 @@ function drawReview(docs){const T=rvTotals();
 async function saveReview(){const rows=RV.filter(r=>r.on);if(!rows.length){toast('ยังไม่ได้เลือกรายการ');return}const keys=[];let n=0;
   const pvd=S.invs.find(v=>/สำรองเลี้ยงชีพ/.test(v.kind||v.name));
   for(const r of rows){
+    if(r.type==='card_balance'){let c=S.cards.find(x=>x.id===r.debt);
+      if(!c){c={id:uid(),name:r.debt_name||'บัตรเครดิต',limit:0,balance:0,rate:16,minPct:8,stmtDay:'',dueDay:r.date?parse(r.date).getDate():'',created:new Date().toISOString(),order:Date.now()};S.cards.push(c)}
+      c.balance=Math.round(num(r.amount)*100)/100;c.asOf=todayStr();c.balTs=Date.now();if(r.date)c.dueDay=parse(r.date).getDate();await dbPut('cards',c);keys.push('card:'+c.id);n++;continue}
     if(r.type==='debt_balance'){let d=S.debts.find(x=>x.id===r.debt);
       if(!d){d={id:uid(),name:r.debt_name||'Pay Later',kind:'Pay Later / ผ่อนในแอป',balance:0,original:0,rate:0,minPay:Math.round(num(r.amount)),dueDay:r.date?parse(r.date).getDate():'',created:new Date().toISOString(),order:Date.now()};S.debts.push(d)}
       d.balance=Math.round(num(r.amount)*100)/100;d.asOf=todayStr();d.balTs=Date.now();await dbPut('debts',d);keys.push('debt:'+d.id);n++;continue}
@@ -1940,22 +1946,23 @@ async function saveReview(){const rows=RV.filter(r=>r.on);if(!rows.length){toast
     await dbPut('tx',t);if(t.link)keys.push(t.link);n++}
   closeSheet();await loadEntities();await afterTxChange(keys);toast(`บันทึกแล้ว ${n} รายการ`)}
 async function handleSlips(files){if(!files?.length)return;
-  if(!(await canReadImages())){toast('อ่านรูปอัตโนมัติได้เฉพาะในแอป Claude ใช้แบบฟอร์มกรอกเองแทน');return openManual('payslip')}
+  if(!(await canReadImages()))return ocrSlips(files);
   try{const{docs,items}=await readSlips(files);if(!items.length){toast('อ่านไม่พบตัวเลขในรูป ลองรูปที่ชัดขึ้น หรือกรอกเอง');const st=$('#slipStatus');if(st)st.textContent='';return}
-    RV=items.map(x=>({on:true,type:x.type,cat:CAT[x.cat]&&CAT[x.cat].type===(x.type==='in'?'in':'out')?x.cat:(x.type==='in'?'otherin':'other'),amount:+x.amount,date:/^\d{4}-\d\d-\d\d$/.test(x.date||'')?x.date:todayStr(),label:x.label||'',debt_name:x.debt_name,debt:x.type==='debt_balance'?(S.debts.find(d=>x.debt_name&&(d.name.includes(x.debt_name)||x.debt_name.includes(d.name)))?.id||'__new'):undefined}));
+    RV=items.map(x=>({on:true,type:x.type,cat:CAT[x.cat]&&CAT[x.cat].type===(x.type==='in'?'in':'out')?x.cat:(x.type==='in'?'otherin':'other'),amount:+x.amount,date:/^\d{4}-\d\d-\d\d$/.test(x.date||'')?x.date:todayStr(),label:x.label||'',debt_name:x.debt_name||x.card_name,debt:x.type==='debt_balance'?(S.debts.find(d=>x.debt_name&&(d.name.includes(x.debt_name)||x.debt_name.includes(d.name)))?.id||'__new'):x.type==='card_balance'?(S.cards.find(c=>x.card_name&&(c.name.includes(x.card_name)||x.card_name.includes(c.name)))?.id||(S.cards.length===1?S.cards[0].id:'__new')):undefined}));
     await markDups();const st=$('#slipStatus');if(st)st.textContent='';drawReview(docs)}
   catch(e){const st=$('#slipStatus');if(st)st.textContent='';toast(e?.code==='not_granted'?'ต้องอนุญาตให้แอปถาม Claude ก่อน':e?.code==='rate_limited'?'ใช้งานถี่เกินไป รอสักครู่':'อ่านรูปไม่สำเร็จ ลองใหม่หรือกรอกเอง')}}
 /* manual forms (works everywhere, incl. your own website) */
 const MANUAL={
  payslip:{t:'กรอกสลิปเงินเดือน',f:[['in','salary','เงินเดือน'],['in','salary','เงินได้ประจำ'],['in','shift','ค่าเวร'],['in','shift','ค่าล่วงเวลา (OT)'],['in','bonus','เงินได้อื่นๆ/โบนัส'],['out','tax','ภาษีหัก ณ ที่จ่าย'],['out','sso','ประกันสังคม'],['out','pvd','กองทุนสำรองเลี้ยงชีพ'],['out','loan','เงินกู้ที่หักจากเงินเดือน']]},
  shop:{t:'รายได้จากร้าน',f:[['in','shop','กำไรขั้นต้น (Gross profit)']]},
- affiliate:{t:'รายได้ Affiliate',f:[['in','affiliate','ค่าคอมที่ได้รับ']]}};
+ affiliate:{t:'รายได้ Affiliate',f:[['in','affiliate','ค่าคอมที่ได้รับ']]},
+ bills:{t:'บิลรายเดือน',f:[['out','util','ค่าไฟ'],['out','util','ค่าน้ำ'],['out','phone','ค่าเน็ต/โทรศัพท์'],['out','rent','ค่าเช่า/ส่วนกลาง'],['out','loan','ผ่อนบ้าน'],['out','loan','ผ่อนรถ'],['out','fun','สมาชิกรายเดือน']]}};
 function openManual(kind){const m=MANUAL[kind];openSheet(`<h2>${m.t}</h2><form class="f" id="mf"><label class="fld"><span>วันที่เงินเข้า</span><input type="date" id="mf-d" value="${todayStr()}"></label>${m.f.map(([ty,c,l],i)=>`<label class="row"><span class="grow small">${l}${ty==='out'?' <span class="muted">(หัก)</span>':''}</span><input id="mf-${i}" inputmode="decimal" class="num pin" style="width:120px" placeholder="0"></label>`).join('')}${kind==='shop'?'<label class="fld"><span>โน้ต (เช่น ช่วงวันที่ ยอดขายสุทธิ)</span><input id="mf-n" placeholder="1–15 ต.ค. ยอดขาย 83,084"></label>':''}<p class="hint" style="margin:0">${kind==='payslip'?'ใส่ยอดก่อนหักทุกช่องที่มี ช่องว่างข้ามได้ ติดลบได้ถ้าสลิปเป็นยอดติดลบ':'ร้านค้า: บันทึกกำไร ไม่ใช่ยอดขาย เพราะยอดขายส่วนใหญ่เป็นต้นทุนสินค้า'}</p><button class="btn green">ตรวจก่อนบันทึก</button></form>`,el=>el.querySelector('#mf').onsubmit=async e=>{e.preventDefault();const d=$('#mf-d').value||todayStr();const note=$('#mf-n')?.value||'';
   RV=m.f.map(([ty,c,l],i)=>({on:true,type:ty,cat:c,amount:num($('#mf-'+i).value),date:d,label:note||l})).filter(r=>r.amount);if(!RV.length){toast('ใส่ตัวเลขอย่างน้อย 1 ช่อง');return}await markDups();drawReview([])})}
 function slipCard(){return`<div class="sec"><div class="card stack"><div class="row between"><b>นำเข้าจากสลิป / รูปหน้าจอ</b><span class="chip">ใหม่</span></div>
-  <p class="small muted" style="margin:0">สลิปเงินเดือน ยอดขายร้าน (Loyverse) ค่าคอม Affiliate บิล Pay Later อัปได้หลายรูปพร้อมกัน แอปแยกประเภทให้ แล้วให้ตรวจก่อนบันทึก</p>
-  <label class="btn green" style="justify-self:start"><input type="file" id="slipIn" class="vh" accept="image/jpeg,image/png,image/webp,image/gif" multiple>เลือกรูป</label><div class="hint" id="slipStatus"></div>
-  <div class="row small" style="gap:6px;flex-wrap:wrap"><span class="muted">หรือกรอกเอง:</span><button class="btn sm soft" data-act="manual" data-v="payslip">สลิปเงินเดือน</button><button class="btn sm soft" data-act="manual" data-v="shop">รายได้ร้าน</button><button class="btn sm soft" data-act="manual" data-v="affiliate">Affiliate</button></div></div></div>`}
+  <p class="small muted" style="margin:0">รายรับ: สลิปเงินเดือน ยอดขายร้าน ค่าคอม Affiliate · รายจ่าย: ใบเสร็จ สลิปโอน บิลค่าน้ำ ค่าไฟ ค่าเน็ต ค่าเช่า/ผ่อนบ้าน สเตทเมนต์บัตรเครดิต Pay Later อัปได้หลายรูปพร้อมกัน แอปแยกประเภทให้ แล้วให้ตรวจก่อนบันทึก</p>
+  <label class="btn green" style="justify-self:start"><input type="file" id="slipIn" class="vh" accept="image/jpeg,image/png,image/webp,image/gif" multiple>เลือกรูป</label><div class="hint" id="slipStatus">${window.claude?'':'บนเว็บ: อ่านตัวหนังสือในเครื่อง ฟรี ไม่ส่งรูปไปไหน ครั้งแรกโหลดข้อมูลภาษาไทยราว 1–2 นาที แม่นยำน้อยกว่าในแอป Claude ตรวจยอดก่อนบันทึกทุกครั้ง'}</div>
+  <div class="row small" style="gap:6px;flex-wrap:wrap"><span class="muted">หรือกรอกเอง:</span><button class="btn sm soft" data-act="manual" data-v="payslip">สลิปเงินเดือน</button><button class="btn sm soft" data-act="manual" data-v="shop">รายได้ร้าน</button><button class="btn sm soft" data-act="manual" data-v="affiliate">Affiliate</button><button class="btn sm soft" data-act="manual" data-v="bills">บิลรายเดือน</button></div></div></div>`}
 {const base=renderHome;renderHome=function(){const h=base();const k=h.indexOf('<div class="sec"><div class="kpis">');if(k<0)return h+slipCard();const e=h.indexOf('</div></div>',h.indexOf('</button></div>',k))+12;return h.slice(0,e)+slipCard()+h.slice(e)}}
 {const base=dataHTML;dataHTML=function(){return slipCard()+base()}}
 Object.assign(A,{manual:d=>openManual(d.v)});
@@ -2025,6 +2032,55 @@ Object.assign(A,{
         let saved=0;if(el.querySelector('#lkImg').checked)saved=await shrinkMedia();
         closeSheet();await loadEntities();await loadMedia();await loadMonth();render();toast(`เสร็จแล้ว รวม ${money(q.before)} → ${money(q.after)} รายการ${saved?` · รูปเล็กลง ${fmtBytes(saved)}`:''}`)}})},
 });
+/* ========== on-device OCR for the website (free; Claude app uses AI reading instead) ========== */
+let TESS=null;
+function loadTess(){if(window.Tesseract)return Promise.resolve(window.Tesseract);if(TESS)return TESS;
+  TESS=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';s.onload=()=>window.Tesseract?res(window.Tesseract):rej(new Error('load'));s.onerror=()=>{TESS=null;rej(new Error('load'))};document.head.appendChild(s)});return TESS}
+const THM={'ม.ค':1,'ก.พ':2,'มี.ค':3,'เม.ย':4,'พ.ค':5,'มิ.ย':6,'ก.ค':7,'ส.ค':8,'ก.ย':9,'ต.ค':10,'พ.ย':11,'ธ.ค':12,'มกราคม':1,'กุมภาพันธ์':2,'มีนาคม':3,'เมษายน':4,'พฤษภาคม':5,'มิถุนายน':6,'กรกฎาคม':7,'สิงหาคม':8,'กันยายน':9,'ตุลาคม':10,'พฤศจิกายน':11,'ธันวาคม':12};
+const ENM={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function fixY(y){y=+y;if(y<100)y+=y>=60?2500:2000;if(y>2400)y-=543;return y}
+function okDate(y,m,d){return y>=2015&&y<=2035&&m>=1&&m<=12&&d>=1&&d<=31?`${y}-${pad(m)}-${pad(d)}`:null}
+function findDate(t){let m,out=[];
+  const re1=/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/g;while(m=re1.exec(t)){const r=okDate(fixY(m[3]),+m[2],+m[1]);if(r)out.push(r)}
+  const re2=/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/g;while(m=re2.exec(t)){const r=okDate(fixY(m[1]),+m[2],+m[3]);if(r)out.push(r)}
+  const re3=new RegExp('(\\d{1,2})\\s*('+Object.keys(THM).map(k=>k.replace(/\./g,'\\.')).join('|')+')\\.?\\s*(\\d{2,4})','g');while(m=re3.exec(t)){const r=okDate(fixY(m[3]),THM[m[2]],+m[1]);if(r)out.push(r)}
+  const re4=/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(\d{2,4})/gi;while(m=re4.exec(t)){const r=okDate(fixY(m[3]),ENM[m[2].toLowerCase()],+m[1]);if(r)out.push(r)}
+  return out[0]||null}
+const TOTAL_KW=/(ยอดรวม|รวมทั้งสิ้น|ยอดชำระ|ยอดที่ต้องชำระ|จำนวนเงิน|ยอดเงิน|ยอดสุทธิ|รวมเงิน|ชำระแล้ว|total|amount|grand|net|pay)/i;
+const RULES_OCR=[
+ [/บัตรเครดิต|credit\s*card|ยอดเรียกเก็บ|ชำระขั้นต่ำ|minimum\s*pay|statement/i,{type:'card_balance'}],
+ [/pay\s*later|spaylater|laz\s*pay|ประวัติบิล|ผ่อนชำระ.*แอป/i,{type:'debt_balance'}],
+ [/การไฟฟ้า|กฟภ|กฟน|\bPEA\b|\bMEA\b|ค่าไฟ|kwh|หน่วยไฟ/i,{type:'out',cat:'util',l:'ค่าไฟ'}],
+ [/ประปา|กปภ|กปน|ค่าน้ำ\b|ลบ\.ม/i,{type:'out',cat:'util',l:'ค่าน้ำ'}],
+ [/\bAIS\b|true\s*move|truemove|dtac|\bNT\b|3bb|fiber|อินเทอร์เน็ต|internet|ค่าโทร/i,{type:'out',cat:'phone',l:'ค่าเน็ต/โทรศัพท์'}],
+ [/ค่าเช่า|ค่าห้อง|หอพัก|คอนโด|นิติบุคคล|ค่าส่วนกลาง/i,{type:'out',cat:'rent',l:'ค่าเช่า/ส่วนกลาง'}],
+ [/สินเชื่อ|ผ่อนบ้าน|เช่าซื้อ|ไฟแนนซ์|ลีสซิ่ง|leasing|loan|ค่างวด/i,{type:'out',cat:'loan',l:'ค่างวด'}],
+ [/เบี้ยประกัน|ประกันชีวิต|ประกันสุขภาพ|insurance/i,{type:'out',cat:'ins',l:'เบี้ยประกัน'}],
+ [/shopee|lazada|tiktok\s*shop|central|robinson/i,{type:'out',cat:'shop',l:'ช้อปปิ้ง'}],
+ [/grab|bolt|lineman|bts|mrt|ptt|shell|bangchak|caltex|น้ำมัน|ทางด่วน/i,{type:'out',cat:'travel',l:'เดินทาง'}],
+ [/โรงพยาบาล|คลินิก|ร้านยา|pharmacy|hospital|clinic/i,{type:'out',cat:'health',l:'สุขภาพ'}],
+ [/7-?eleven|เซเว่น|lotus|โลตัส|big\s*c|บิ๊กซี|makro|แม็คโคร|tops/i,{type:'out',cat:'house',l:'ของใช้/ซูเปอร์มาร์เก็ต'}],
+ [/starbucks|amazon|café|cafe|กาแฟ|ชานม/i,{type:'out',cat:'cafe',l:'คาเฟ่'}],
+ [/ร้านอาหาร|อาหาร|restaurant|kfc|mcdonald|mk\b|food/i,{type:'out',cat:'food',l:'อาหาร'}],
+ [/เงินเดือน|pay\s*slip|salary/i,{type:'in',cat:'salary',l:'เงินเดือน'}],
+ [/gross\s*profit|net\s*sales|loyverse/i,{type:'in',cat:'shop',l:'รายได้ร้าน'}],
+ [/commission|affiliate|ค่าคอม/i,{type:'in',cat:'affiliate',l:'ค่าคอม'}]];
+function amountsIn(line){const out=[];const re=/(\d{1,3}(?:[,\s]\d{3})+|\d+)[.,](\d{2})(?!\d)/g;let m;while(m=re.exec(line)){const v=parseFloat(m[1].replace(/[,\s]/g,'')+'.'+m[2]);if(v>0&&v<10000000)out.push(v)}return out}
+function parseOCR(raw){const t=raw.replace(/[๐-๙]/g,c=>'๐๑๒๓๔๕๖๗๘๙'.indexOf(c)).replace(/[฿]/g,' ');const lines=t.split(/\n+/);
+  let amt=null;for(const l of lines){if(TOTAL_KW.test(l)){const a=amountsIn(l);if(a.length){amt=Math.max(...a);break}}}
+  if(amt==null){const all=lines.flatMap(amountsIn);if(all.length)amt=Math.max(...all)}
+  let rule={type:'out',cat:'other',l:'รายจ่าย'};let name='';for(const[re,r]of RULES_OCR){const m=t.match(re);if(m){rule=r;name=m[0];break}}
+  if(/โอนเงินสำเร็จ|transfer\s*success|ทำรายการสำเร็จ|จ่ายบิลสำเร็จ/i.test(t)&&rule.cat==='other')rule={type:'out',cat:'other',l:'โอน/จ่ายเงิน'};
+  return{amount:amt,date:findDate(t)||todayStr(),type:rule.type,cat:rule.cat||null,label:(rule.l||(rule.type==='card_balance'?'ยอดบัตรเครดิต':'ยอดบิล Pay Later'))+(name&&rule.l&&!rule.l.includes(name)?' · '+name:''),debt_name:rule.type==='debt_balance'?'Pay Later':rule.type==='card_balance'?name:''}}
+async function ocrSlips(files){const st=$('#slipStatus');const say=t=>{if(st)st.textContent=t};
+  say('กำลังโหลดตัวอ่านภาษาไทย… (ครั้งแรกนานหน่อย)');let T;try{T=await loadTess()}catch(e){say('');toast('โหลดตัวอ่านไม่ได้ ต้องต่ออินเทอร์เน็ต ใช้แบบฟอร์มกรอกเองแทน');return openManual('bills')}
+  const items=[];let worker;try{worker=await T.createWorker(['tha','eng'],1,{logger:m=>{if(m.status==='recognizing text')say(`กำลังอ่านรูป… ${Math.round(m.progress*100)}%`)}});
+    for(let i=0;i<files.length;i++){say(`กำลังอ่านรูปที่ ${i+1}/${files.length}…`);const{data}=await worker.recognize(files[i]);const p=parseOCR(data.text||'');if(p.amount)items.push(p)}}
+  catch(e){say('');toast('อ่านรูปไม่สำเร็จ ลองรูปที่ชัดขึ้น หรือกรอกเอง');return}finally{try{await worker?.terminate()}catch(_){}}
+  say('');if(!items.length){toast('อ่านไม่พบยอดเงินในรูป ลองครอปให้เห็นยอดชัดๆ หรือกรอกเอง');return}
+  RV=items.map(x=>({on:true,type:x.type,cat:x.cat||(x.type==='in'?'otherin':'other'),amount:x.amount,date:x.date,label:x.label,debt_name:x.debt_name,
+    debt:x.type==='debt_balance'?(S.debts.find(d=>/pay\s*later/i.test(d.name+d.kind))?.id||'__new'):x.type==='card_balance'?(S.cards.length===1?S.cards[0].id:S.cards.find(c=>x.debt_name&&c.name.toLowerCase().includes(x.debt_name.toLowerCase()))?.id||'__new'):undefined}));
+  await markDups();drawReview([{doc_type:'other',title:'อ่านด้วยตัวอ่านในเครื่อง',note:'ตรวจยอด วันที่ และหมวดให้ถูกก่อนบันทึก'}])}
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
