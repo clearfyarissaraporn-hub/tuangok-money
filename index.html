@@ -2108,13 +2108,13 @@ const PERSON=/(นาย|นางสาว|นาง|น\.ส\.)\s*\S+/;
 let OCRW=null;
 async function getWorker(T,say){if(OCRW)return OCRW;OCRW=await T.createWorker(['tha','eng'],1,{logger:m=>{if(m.status==='recognizing text')say(`กำลังอ่านรูป… ${Math.round(m.progress*100)}%`);else if(/load/.test(m.status||''))say('กำลังโหลดตัวอ่านภาษาไทย…')}});return OCRW}
 ocrSlips=async function(files,append){const st=$('#slipStatus');const say=t=>{if(st)st.textContent=t;const s2=$('#rvStatus');if(s2)s2.textContent=t};
-  say('กำลังเตรียมตัวอ่าน… (ครั้งแรกนานหน่อย)');let T;try{T=await loadTess()}catch(e){say('');toast('โหลดตัวอ่านไม่ได้ ต้องต่ออินเทอร์เน็ต ใช้แบบฟอร์มกรอกเองแทน');return openManual('bills')}
+  say('กำลังเตรียมตัวอ่าน… (ครั้งแรกนานหน่อย)');let T;try{T=await loadTess()}catch(e){say('โหลดตัวอ่านไม่ได้ ('+(e.message||'network')+') ต้องต่ออินเทอร์เน็ต ลองใหม่ หรือกดกรอกเอง');return}
   const items=[],miss=[];
   for(let i=0;i<files.length;i++){say(`กำลังอ่านรูปที่ ${i+1}/${files.length}…`);
     try{const w=await getWorker(T,say);const{data}=await w.recognize(files[i]);const p=parseOCR(data.text||'');if(p.amount)items.push(p);else miss.push(i+1)}
-    catch(e){try{await OCRW?.terminate()}catch(_){}OCRW=null;miss.push(i+1)}}
-  say('');if(!items.length){toast('อ่านไม่พบยอดเงินในรูป ลองครอปให้เห็นยอดชัดๆ หรือกรอกเอง');return}
-  const add=items.map(x=>({on:true,type:x.type,cat:x.cat||(x.type==='in'?'otherin':'other'),amount:x.amount,date:x.date,label:x.label,debt_name:x.debt_name,
+    catch(e){try{await OCRW?.terminate()}catch(_){}OCRW=null;miss.push(i+1);S.ocrErr=String(e?.message||e)}}
+  if(!items.length){say(S.ocrErr?'อ่านไม่สำเร็จ: '+S.ocrErr+' · ลองใหม่อีกครั้ง หรือกรอกเอง':'อ่านไม่พบยอดเงินในรูป ลองครอปให้เห็นยอดชัดๆ หรือกรอกเอง');S.ocrErr='';return}
+  say('');const add=items.map(x=>({on:true,type:x.type,cat:x.cat||(x.type==='in'?'otherin':'other'),amount:x.amount,date:x.date,label:x.label,debt_name:x.debt_name,
     debt:x.type==='debt_balance'?(S.debts.find(d=>/pay\s*later/i.test(d.name+d.kind))?.id||'__new'):x.type==='card_balance'?(S.cards.length===1?S.cards[0].id:'__new'):undefined}));
   RV=append?[...RV,...add]:add;await markDups();
   drawReview([{doc_type:'other',title:`อ่านได้ ${items.length} รูป${miss.length?` · อ่านไม่ได้รูปที่ ${miss.join(', ')}`:''}`,note:'ตรวจยอด วันที่ และหมวดก่อนบันทึก'}])}
@@ -2124,6 +2124,51 @@ ocrSlips=async function(files,append){const st=$('#slipStatus');const say=t=>{if
 document.addEventListener('change',async e=>{if(e.target.id!=='slipMore')return;const f=[...e.target.files];e.target.value='';if(!f.length)return;
   if(await canReadImages()){try{$('#rvStatus').textContent='กำลังอ่าน…';const{items}=await readSlips(f);const keep=RV;RV=items.map(x=>({on:true,type:x.type,cat:CAT[x.cat]?x.cat:(x.type==='in'?'otherin':'other'),amount:+x.amount,date:/^\d{4}-\d\d-\d\d$/.test(x.date||'')?x.date:todayStr(),label:x.label||'',debt_name:x.debt_name||x.card_name,debt:/_balance$/.test(x.type)?'__new':undefined}));RV=[...keep,...RV];await markDups();drawReview([])}catch(err){toast('อ่านรูปไม่สำเร็จ')}}
   else ocrSlips(f,true)});
+/* version stamp + clear error reporting */
+const APP_VER='v18 · 25 ต.ค. 69';
+{const old=slipCard;slipCard=function(){return old().replace('<span class="chip">ใหม่</span>',`<span class="chip">${APP_VER}</span>`)}}
+{const old=loadTess;loadTess=function(){return Promise.race([old(),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),45000))])}}
+window.addEventListener('unhandledrejection',e=>{const s=$('#slipStatus');if(s&&/กำลัง/.test(s.textContent)){s.textContent='อ่านไม่สำเร็จ: '+(e.reason?.message||e.reason||'ไม่ทราบสาเหตุ')+' · ลองใหม่ หรือกรอกเอง'}});
+/* ========== two scan modes (income / expense) + never dead-end when OCR can't find the amount ========== */
+S.scanMode='out';
+{const old=slipCard;slipCard=function(){return old().replace(/<label class="btn green" style="justify-self:start">[\s\S]*?<\/label>/,
+ `<div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn green"><input type="file" id="scanOut" class="vh" accept="image/*" multiple>สแกนรายจ่าย</label><label class="btn soft scan-in"><input type="file" id="scanIn" class="vh" accept="image/*" multiple>สแกนรายรับ</label></div>`)}}
+{const old=slipPrompt;slipPrompt=function(){return old()+(S.scanMode==='in'?`\nผู้ใช้กด "สแกนรายรับ": ทุกรายการเป็นเงินที่ได้รับ ใช้ type in (สลิปโอนเงินเข้า=otherin, ยอดขายร้าน=shop, ค่าคอม=affiliate, สลิปเงินเดือนลงตามกฎสลิปเงินเดือน)`:`\nผู้ใช้กด "สแกนรายจ่าย": เป็นเงินที่จ่ายออก ใช้ type out (หรือ card_balance/debt_balance สำหรับบิลที่ยังค้าง) ห้ามใช้ type in ยกเว้นสลิปเงินเดือน`)}}
+function forceMode(p){if(S.scanMode==='in'){if(p.type!=='in'){p.type='in';p.cat=/salary|shop|affiliate|shift|bonus|side/.test(p.cat||'')?p.cat:'otherin';p.label=(p.label||'').replace(/^โอนเงิน/,'รับโอน')||'รับเงิน'}}
+  else if(p.type==='in'&&p.cat!=='salary'){p.type='out';p.cat='other'}return p}
+/* better amount fallback: "260 00 THB", or a line that is just a number */
+{const old=pickAmount;pickAmount=function(t){let a=old(t);if(a!=null)return a;const c=[];
+  t.split(/\n+/).forEach(l=>{if(/X{2,}|\*{2,}/i.test(l))return;let m=l.match(/(\d{1,3}(?:,\d{3})+|\d{1,6})\s+(\d{2})\s*(บาท|THB|฿)/i);if(m)c.push(parseFloat(m[1].replace(/,/g,'')+'.'+m[2]));
+    m=l.trim().match(/^฿?\s*(\d{1,3}(?:,\d{3})+|\d{1,6})(?:[.,](\d{2}))?\s*(บาท|THB)?$/i);if(m&&m[1].replace(/,/g,'').length<=6)c.push(parseFloat(m[1].replace(/,/g,'')+(m[2]?'.'+m[2]:'')))});
+  return c.length?Math.max(...c.filter(v=>v>0)):null}}
+/* image clean-up before OCR: upscale small images, grayscale, stronger contrast */
+async function prepImage(file){try{const url=URL.createObjectURL(file);const img=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=url});
+  const sc=img.width<1100?Math.min(2.5,1400/img.width):img.width>2200?2200/img.width:1;const cv=document.createElement('canvas');cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
+  const g=cv.getContext('2d');g.drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(url);const d=g.getImageData(0,0,cv.width,cv.height),p=d.data;
+  for(let i=0;i<p.length;i+=4){let y=.299*p[i]+.587*p[i+1]+.114*p[i+2];y=y>200?255:y<120?Math.max(0,y*.6):y;p[i]=p[i+1]=p[i+2]=y}g.putImageData(d,0,0);
+  return await new Promise(r=>cv.toBlob(b=>r(b||file),'image/png'))}catch(e){return file}}
+ocrSlips=async function(files,append){const st=$('#slipStatus');const say=(t,retry)=>{if(st)st.innerHTML=esc(t)+(retry?' <button class="linkbtn" data-act="ocrRetry">ลองใหม่</button>':'');const s2=$('#rvStatus');if(s2)s2.textContent=t};
+  S.lastFiles=files;say('กำลังเตรียมตัวอ่าน… (ครั้งแรกต้องต่อเน็ต รอ 1–2 นาที)');let T;
+  try{T=await loadTess()}catch(e){say('โหลดตัวอ่านไม่ได้ ('+(e.message||'network')+') เช็กอินเทอร์เน็ตแล้วกด',true);return}
+  const rows=[],raws=[];
+  for(let i=0;i<files.length;i++){say(`กำลังอ่านรูปที่ ${i+1}/${files.length}…`);
+    try{const w=await getWorker(T,say);const{data}=await w.recognize(await prepImage(files[i]));const txt=data.text||'';const p=forceMode(parseOCR(txt));p.raw=txt;
+      if(!p.amount){p.amount=0;p.label='อ่านยอดไม่ได้ ใส่ยอดเอง · '+(p.label||'')}rows.push(p);raws.push(txt)}
+    catch(e){try{await OCRW?.terminate()}catch(_){}OCRW=null;say('อ่านรูปที่ '+(i+1)+' ไม่สำเร็จ ('+(e?.message||e)+')',true);if(!rows.length)return}}
+  say('');
+  const add=rows.map(x=>({on:true,type:x.type,cat:x.cat||(x.type==='in'?'otherin':'other'),amount:x.amount,date:x.date,label:x.label,debt_name:x.debt_name,raw:x.raw,
+    debt:x.type==='debt_balance'?(S.debts.find(d=>/pay\s*later/i.test(d.name+d.kind))?.id||'__new'):x.type==='card_balance'?(S.cards.length===1?S.cards[0].id:'__new'):undefined}));
+  RV=append?[...RV,...add]:add;await markDups();const miss=add.filter(r=>!r.amount).length;
+  drawReview([{doc_type:'other',title:`${S.scanMode==='in'?'สแกนรายรับ':'สแกนรายจ่าย'} ${rows.length} รูป${miss?` · ${miss} รูปต้องใส่ยอดเอง`:''}`,note:'ตรวจยอด วันที่ และหมวดก่อนบันทึก'}])}
+/* show what the reader saw, so a wrong/missing amount is easy to fix */
+{const old=rvRow;rvRow=function(r,i){const h=old(r,i);return r.raw?h.replace(/<\/div>$/,`<details class="rawtxt"><summary>ข้อความที่อ่านได้</summary><pre>${esc(r.raw.slice(0,800))}</pre></details></div>`):h}}
+{const old=saveReview;saveReview=async function(){const bad=RV.filter(r=>r.on&&!/_balance$/.test(r.type)&&!(num(r.amount)>0||num(r.amount)<0));if(bad.length){toast('ใส่ยอดเงินให้ครบก่อนบันทึก');return}return old()}}
+async function scanWith(files,mode){if(!files.length)return;S.scanMode=mode;
+  if(await canReadImages())return handleSlips(files);return ocrSlips(files)}
+Object.assign(A,{ocrRetry:()=>{if(S.lastFiles)ocrSlips(S.lastFiles)}});
+document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id!=='scanOut')return;const f=[...e.target.files];e.target.value='';scanWith(f,id==='scanIn'?'in':'out')});
+/* Claude path: force mode on results too */
+{const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
