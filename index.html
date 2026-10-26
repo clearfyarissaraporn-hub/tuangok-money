@@ -379,6 +379,9 @@ details.rawtxt{font-size:12px;color:var(--muted)}details.rawtxt pre{white-space:
 .okic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--sprout-soft);color:var(--good);font-weight:700;flex:none}.okic.warn{background:var(--sun-soft);color:var(--warn)}
 #updBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top,0px));z-index:70;display:flex;gap:10px;align-items:center;background:linear-gradient(180deg,#3A2780,#2A1A62);border:1px solid var(--warn);border-radius:14px;padding:8px 12px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);white-space:nowrap}
 @media (max-width:420px){.brand{font-size:15px}.monthsw span{min-width:56px}}
+.qrbox{background:#fff;border-radius:20px;padding:12px;width:220px;box-shadow:0 0 24px rgba(98,232,255,.4)}.qrbox img{width:100%;display:block;image-rendering:pixelated}
+pre.shmsg{white-space:pre-wrap;font-family:inherit;font-size:13px;margin:0}
+#instBar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:65;display:flex;gap:10px;align-items:center;max-width:576px;margin:0 auto;background:linear-gradient(180deg,#3A2780,#2A1A62);border:1px solid rgba(255,170,240,.45);border-radius:16px;padding:10px 12px;box-shadow:0 10px 28px rgba(0,0,0,.45)}#instBar img{width:40px;height:40px;border-radius:10px}#instBar .grow{flex:1;min-width:0;font-size:14px}
 </style>
 </head><body>
 <div id="sky" aria-hidden="true"></div>
@@ -2187,7 +2190,7 @@ document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id
 /* Claude path: force mode on results too */
 {const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
 /* ========== save indicator + in-app version update ========== */
-const APP_V=20;
+const APP_V=22;
 {const h=$('.top-in');if(h&&!$('#saveBtn'))$('#bell').insertAdjacentHTML('beforebegin',`<button class="savebtn" id="saveBtn" data-act="saveInfo" aria-label="สถานะการบันทึก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><i id="saveDot"></i></button>`)}
 let lastSave=Date.now(),saveFlash;
 function markSaved(){lastSave=Date.now();const b=$('#saveBtn');if(!b)return;b.classList.remove('saved');void b.offsetWidth;b.classList.add('saved');clearTimeout(saveFlash);saveFlash=setTimeout(()=>b.classList.remove('saved'),1600);updSaveDot()}
@@ -2234,6 +2237,43 @@ document.addEventListener('input',e=>{const el=e.target;if(!el.closest||!el.clos
   const n=RV.filter(r=>r.on).length;await old();
   if(first&&!$('#sheetRoot .sheet')){const d=parse(first.date);if(d.getFullYear()!==S.y||d.getMonth()!==S.m){S.y=d.getFullYear();S.m=d.getMonth();await loadMonth()}
     S.tab='list';S.sub.list='list';S.listFilter='all';render();window.scrollTo(0,0);toast(`บันทึกแล้ว ${n} รายการ · ${fmtMonth(S.y,S.m)}`)}}}
+/* ========== share the app (link + QR + ready-made message) ========== */
+const SHARE_URL='https://clearfyarissaraporn-hub.github.io/tuangok-money/';
+const SHARE_MSG=`ถั่วงอก Money แอปจดรายรับรายจ่าย ปลดหนี้ ออมเงิน ใช้ฟรี ไม่ต้องสมัคร ข้อมูลอยู่ในมือถือเราเอง ไม่มีใครเห็น
+เปิดลิงก์ใน Chrome → แตะ ⋮ → "เพิ่มลงหน้าจอหลัก" (iPhone: Safari → แชร์ → "เพิ่มไปยังหน้าจอโฮม")
+${SHARE_URL}`;
+const QR_IMG='data:image/webp;base64,UklGRhQBAABXRUJQVlA4TAcBAAAvZ8FZAA8w//M///MfeHDjto0g8f+fVpHs3l2X6hDR/wnoT0d7UkRI2e+oOYoq1dK8JKRQpTzhoDRFlZxVIiXVSc0tG9s8pD1JkmTsZ/SsNKWin56MCCkJpaTEGRX0UogiuqSEioQyQw6JVEpUKoXUIVUiqNJDSHckTUVBShWXlKKKokil9PnhQAoiFQpxS0UpUYRIl1QhKoJkRhwSIhS1VIguqZQga2b64uGoMkskKVXkklCkEaQcUxGlVDSJ5JAklTXFA+mMLBJFhr1yRs9IKEFF3z4Ze9qtkZRDag6VVqiQQ0J6KS+7KIJRqdJNlbQoZfnweKbarIWo3NGeKkSpEvrwdP5pBAA=';
+function shareSheet(){openSheet(`<h2>แชร์แอปให้เพื่อน</h2><div class="stack small">
+  <div style="display:grid;place-items:center"><div class="qrbox"><img src="${QR_IMG}" alt="QR code ลิงก์แอป"></div><span class="muted" style="margin-top:6px">ให้เพื่อนสแกนจากหน้าจอนี้ได้เลย</span></div>
+  <label class="fld"><span>ลิงก์แอป</span><input id="shUrl" readonly value="${SHARE_URL}"></label>
+  <div class="row" style="gap:8px;flex-wrap:wrap">${navigator.share&&!window.claude?'<button class="btn green" data-act="shareNative">แชร์ผ่าน LINE / แอปอื่น</button>':''}<button class="btn ${navigator.share&&!window.claude?'soft':'green'}" data-act="shareCopy" data-v="msg">คัดลอกข้อความ + ลิงก์</button><button class="btn soft" data-act="shareCopy" data-v="url">คัดลอกลิงก์</button></div>
+  <details class="g" style="margin:0"><summary>ข้อความที่จะส่ง</summary><div class="body"><pre class="shmsg">${esc(SHARE_MSG)}</pre></div></details>
+  <p class="hint" style="margin:0">ข้อมูลของแต่ละคนแยกกันในเครื่องของตัวเอง เพื่อนไม่เห็นข้อมูลของคุณ และคุณไม่เห็นของเพื่อน</p></div>
+  <div class="actions"><span></span><button class="btn soft" data-act="closeSheet">ปิด</button></div>`)}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast('คัดลอกแล้ว วางส่งใน LINE ได้เลย');return}catch(e){}const i=$('#shUrl');if(i){i.value=t;i.focus();i.select()}toast('เลือกข้อความแล้ว กดคัดลอกได้เลย')}
+Object.assign(A,{shareApp:()=>shareSheet(),shareCopy:d=>copyText(d.v==='url'?SHARE_URL:SHARE_MSG),
+  shareNative:async()=>{try{await navigator.share({title:'ถั่วงอก Money',text:SHARE_MSG.replace(SHARE_URL,'').trim(),url:SHARE_URL})}catch(e){if(e?.name!=='AbortError')copyText(SHARE_MSG)}}});
+{const old=aboutHTML;aboutHTML=function(){return`<div class="sec"><button class="alertbar soft" data-act="shareApp"><span class="pcode sm">QR</span><span class="grow" style="text-align:left"><b>แชร์แอปให้เพื่อน</b><br><span class="small">ส่งลิงก์ใน LINE หรือให้สแกน QR ใช้ฟรี</span></span><span>›</span></button></div>`+old()}}
+{const old=A.saveInfo;A.saveInfo=function(){old();const a=$('#sheetRoot .sheet .actions');if(a)a.insertAdjacentHTML('beforebegin','<button class="btn soft" data-act="shareApp" style="width:100%;margin-top:8px">แชร์แอปให้เพื่อน</button>')}}
+/* ========== install as an app (PWA) ========== */
+let deferredInstall=null;
+const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;showInstallBar()});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;$('#instBar')?.remove();toast('ติดตั้งแล้ว ดูไอคอนถั่วงอกที่หน้าจอมือถือ')});
+function showInstallBar(){if(!IS_WEB||isStandalone()||$('#instBar'))return;try{if(+localStorage.getItem('tg_inst_hide')>Date.now())return}catch(_){}
+  document.body.insertAdjacentHTML('beforeend',`<div id="instBar"><img src="icon-192.png" alt=""><span class="grow"><b>ติดตั้งถั่วงอก Money</b><br><span class="small muted">เปิดจากไอคอนบนหน้าจอ ใช้ได้แม้ไม่มีเน็ต</span></span><button class="btn sm green" data-act="installApp">ติดตั้ง</button><button class="linkbtn" data-act="instHide" aria-label="ปิด">✕</button></div>`)}
+function installHelp(){openSheet(`<h2>ติดตั้งแอปลงมือถือ</h2><div class="stack small">
+  ${isIOS?`<b>iPhone / iPad (ต้องเปิดใน Safari)</b><ol><li>แตะปุ่ม <b>แชร์</b> (สี่เหลี่ยมมีลูกศรขึ้น) ด้านล่าง</li><li>เลื่อนหา <b>เพิ่มไปยังหน้าจอโฮม</b></li><li>แตะ <b>เพิ่ม</b> มุมขวาบน</li></ol>`:
+  `<b>Android (Chrome)</b><ol><li>แตะ <b>⋮</b> มุมขวาบนของ Chrome</li><li>แตะ <b>ติดตั้งแอป</b> หรือ <b>เพิ่มลงหน้าจอหลัก</b></li><li>แตะ <b>ติดตั้ง</b></li></ol><p class="muted" style="margin:0">ถ้าเปิดจาก LINE, Facebook หรือ Samsung Internet ให้แตะ ⋮ → <b>เปิดใน Chrome</b> ก่อน</p>`}
+  <p class="hint" style="margin:0">ติดตั้งแล้วไอคอนถั่วงอกจะอยู่บนหน้าจอ เปิดแบบเต็มจอเหมือนแอปทั่วไป ข้อมูลเดิมยังอยู่ครบ</p></div><div class="actions"><span></span><button class="btn soft" data-act="closeSheet">ปิด</button></div>`)}
+Object.assign(A,{
+  installApp:async()=>{if(deferredInstall){deferredInstall.prompt();const r=await deferredInstall.userChoice.catch(()=>null);deferredInstall=null;if(r?.outcome==='accepted')$('#instBar')?.remove()}else installHelp()},
+  instHide:()=>{$('#instBar')?.remove();try{localStorage.setItem('tg_inst_hide',Date.now()+3*864e5)}catch(_){}}});
+/* iOS & browsers without the prompt: show the bar too (button opens instructions) */
+setTimeout(()=>{if(IS_WEB&&!isStandalone()&&!deferredInstall)showInstallBar()},6000);
+/* install entry in the save sheet and about page */
+{const old=A.saveInfo;A.saveInfo=function(){old();if(IS_WEB&&!isStandalone()){const a=$('#sheetRoot .sheet .actions');if(a)a.insertAdjacentHTML('beforebegin','<button class="btn green" data-act="installApp" style="width:100%;margin-top:8px">ติดตั้งแอปลงมือถือ</button>')}}}
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
