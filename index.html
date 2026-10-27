@@ -2201,7 +2201,7 @@ document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id
 /* Claude path: force mode on results too */
 {const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
 /* ========== save indicator + in-app version update ========== */
-const APP_V=24;
+const APP_V=25;
 {const h=$('.top-in');if(h&&!$('#saveBtn'))$('#bell').insertAdjacentHTML('beforebegin',`<button class="savebtn" id="saveBtn" data-act="saveInfo" aria-label="สถานะการบันทึก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><i id="saveDot"></i></button>`)}
 let lastSave=Date.now(),saveFlash;
 function markSaved(){lastSave=Date.now();const b=$('#saveBtn');if(!b)return;b.classList.remove('saved');void b.offsetWidth;b.classList.add('saved');clearTimeout(saveFlash);saveFlash=setTimeout(()=>b.classList.remove('saved'),1600);updSaveDot()}
@@ -2425,6 +2425,33 @@ A.miMoveAny=()=>moveSheet();
 /* home: "ใช้จ่าย" excludes money put into savings/investments */
 {const old=renderHome;renderHome=function(){let h=old();const a=agg(S.monthTx);const spend=a.out-a.grp.save;
   return h.replace(`<div class="l">รายจ่าย ›</div><div class="v num">${baht(a.out)}</div>`,`<div class="l">ใช้จ่าย ›</div><div class="v num">${baht(spend)}</div>${a.grp.save?`<div class="tiny" style="color:var(--sun)">+ ออม ${baht(a.grp.save)}</div>`:''}`)}}
+/* v25: สแกนรายจ่าย — เพิ่ม "จ่ายบัตรเครดิต" (ทุกใบ) และ "ค่าอาหาร" ขึ้นบนสุด */
+CAT.food.l='ค่าอาหาร';CATDEF.out.forEach(c=>{if(c[0]==='food')c[1]='ค่าอาหาร'});
+function cpCats(){const L=S.cards.length?S.cards.map(c=>['cp:'+c.id,'จ่ายบัตรเครดิต · '+c.name]):[['cp:__new','จ่ายบัตรเครดิต (สร้างบัตรใหม่)']];
+  L.forEach(([k,l])=>{if(!CAT[k])CAT[k]={k,l,g:null,link:'card',type:'out'}});return L}
+function cardFromText(t){t=String(t||'');return S.cards.find(c=>c.name&&t.toLowerCase().includes(c.name.toLowerCase()))||(S.cards.length===1?S.cards[0]:null)}
+const CP_RE=/ชำระบัตรเครดิต|จ่ายบัตรเครดิต|ชำระค่าบัตร|บัตรเครดิต|credit\s*card|card\s*payment|ชำระยอดบัตร/i;
+{const old=rvRow;rvRow=function(r,i){let h=old(r,i);if(r.type!=='out')return h;
+  const cats=[...CATDEF.out.filter(c=>c[0]==='food'),...cpCats(),...CATDEF.out.filter(c=>c[0]!=='food')];
+  return h.replace(/<select data-rv="cat">[\s\S]*?<\/select>/,`<select data-rv="cat">${cats.map(([k,l])=>`<option value="${k}" ${r.cat===k?'selected':''}>${esc(l)}</option>`).join('')}</select>`)}}
+/* OCR: เดาว่าเป็นสลิปจ่ายบัตร */
+{const old=parseOCR;parseOCR=function(raw){const p=old(raw);if(S.scanMode!=='in'&&p.type!=='in'&&CP_RE.test(raw||'')){const c=cardFromText(raw);cpCats();p.type='out';p.cat='cp:'+(c?c.id:(S.cards[0]?.id||'__new'));p.label='จ่ายบัตรเครดิต'+(c?' · '+c.name:'')}return p}}
+/* AI อ่านรูป */
+{const old=slipPrompt;slipPrompt=function(){return old()+`\nสลิปชำระบัตรเครดิต (จ่ายบัตร/ชำระค่าบัตร): ใช้ type out, cat "cardpay" และใส่ card_name ชื่อธนาคาร/บัตร (ไม่ใส่เลขบัตร)`}}
+{const old=readSlips;readSlips=async function(f){const j=await old(f);cpCats();j.items.forEach(x=>{if(x.cat==='cardpay'||x.type==='pay'){const c=cardFromText(x.card_name||x.label);x.type='out';x.cat='cp:'+(c?c.id:(S.cards[0]?.id||'__new'))}});return j}}
+/* บันทึก: แถวจ่ายบัตร → รายการ "ชำระบัตร" ที่ลดยอดบัตร (ไม่นับซ้ำเป็นรายจ่าย) */
+{const old=saveReview;saveReview=async function(){if(typeof syncReviewFromDom==='function')syncReviewFromDom();
+  const cp=RV.filter(r=>r.on&&r.type==='out'&&/^cp:/.test(r.cat||''));if(!cp.length)return old();
+  if(cp.some(r=>!(num(r.amount)>0))){toast('ใส่ยอดเงินให้ครบก่อนบันทึก');return}
+  const keys=[];let n=0;
+  for(const r of cp){let id=r.cat.slice(3),c=S.cards.find(x=>x.id===id);
+    if(!c){c={id:uid(),name:'บัตรเครดิต',limit:0,balance:0,rate:16,minPct:8,stmtDay:'',dueDay:'',created:new Date().toISOString(),order:Date.now()};S.cards.push(c);await dbPut('cards',c)}
+    const t={id:uid(),ts:Date.now()+n,type:'pay',cat:'cardpay',link:'card:'+c.id,amount:Math.round(num(r.amount)*100)/100,date:r.date||todayStr(),note:(r.label||'จ่ายบัตรเครดิต'),src:'slip'};
+    await dbPut('tx',t);keys.push(t.link);n++;r.on=false;const cb=document.querySelector(`#rvList .rv[data-i="${RV.indexOf(r)}"] [data-rv=on]`);if(cb)cb.checked=false}
+  if(RV.some(r=>r.on))return old().then(()=>toast(`บันทึกแล้ว · จ่ายบัตร ${n} รายการ`));
+  const d=parse(cp[0].date||todayStr());closeSheet();await loadEntities();
+  if(typeof goMonth==='function'&&(d.getFullYear()!==S.y||d.getMonth()!==S.m))goMonth(d.getFullYear(),d.getMonth());
+  await afterTxChange(keys);toast(`บันทึกจ่ายบัตรแล้ว ${n} รายการ · ยอดบัตรลดลงแล้ว`)}}
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
