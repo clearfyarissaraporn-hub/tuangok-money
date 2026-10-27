@@ -391,6 +391,7 @@ pre.shmsg{white-space:pre-wrap;font-family:inherit;font-size:13px;margin:0}
 .stackbar.big{height:26px;border-radius:12px}
 .pgrid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pgrid2>div{display:grid;grid-template-columns:12px 1fr auto;gap:2px 8px;align-items:center;font-size:13px}.pgrid2 .tiny{grid-column:2/4}
 @media (max-width:420px){.gauge-card{grid-template-columns:120px 1fr}.gauge svg{width:120px;height:120px}}
+.choice{display:grid;gap:3px;text-align:left;border:1px solid rgba(255,170,240,.3);background:rgba(0,0,0,.2);color:var(--ink);border-radius:14px;padding:12px 14px;cursor:pointer;font:inherit}.choice b{font-size:15px}.choice span{font-size:12.5px;color:var(--muted)}.choice:active{background:rgba(255,95,203,.15)}
 </style>
 </head><body>
 <div id="sky" aria-hidden="true"></div>
@@ -2200,7 +2201,7 @@ document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id
 /* Claude path: force mode on results too */
 {const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
 /* ========== save indicator + in-app version update ========== */
-const APP_V=23;
+const APP_V=24;
 {const h=$('.top-in');if(h&&!$('#saveBtn'))$('#bell').insertAdjacentHTML('beforebegin',`<button class="savebtn" id="saveBtn" data-act="saveInfo" aria-label="สถานะการบันทึก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><i id="saveDot"></i></button>`)}
 let lastSave=Date.now(),saveFlash;
 function markSaved(){lastSave=Date.now();const b=$('#saveBtn');if(!b)return;b.classList.remove('saved');void b.offsetWidth;b.classList.add('saved');clearTimeout(saveFlash);saveFlash=setTimeout(()=>b.classList.remove('saved'),1600);updSaveDot()}
@@ -2348,6 +2349,82 @@ async function fillCharts(){const box=$('#chartBox');if(!box)return;
    <div class="legend"><span><i class="dot" style="background:${C_IN}"></i>รายรับ</span><span><i class="dot" style="background:${C_OUT}"></i>รายจ่าย</span><span><i class="dot" style="background:${C_SAVE}"></i>ออม+ผ่อนหนี้ (%)</span></div></div></div>`;
   box.innerHTML=h}
 Object.assign(A,{selYearChart:d=>{S.selYear=+d.v;S.sub.list='years';render()}});
+
+/* ========== v24: savings & investments connected properly ==========
+   - "ย้ายเงิน" (transfer) between savings goals / investments: not income, not spending
+   - savings goals can be linked to investment/deposit accounts (counted once in net worth)
+   - starting balances never count as an expense
+   - "ใช้จ่าย" on the home screen excludes money moved to savings/investments */
+TYPE_L.xfer='ย้ายเงิน';
+CAT.move={k:'move',l:'ย้ายเงิน',g:null,link:null,noInc:true,type:'xfer'};
+const xsum=(k,e)=>sum(linked(k,e).filter(t=>t.type==='xfer'),t=>t.dir>0?num(t.amount):-num(t.amount));
+invVal=function(v){const k='inv:'+v.id,l=linked(k,v);return Math.max(0,num(v.value)+sum(l.filter(t=>t.type==='out'))-sum(l.filter(t=>t.type==='in'))+xsum(k,v))};
+invCost=function(v){const k='inv:'+v.id,l=linked(k,v);return Math.max(0,num(v.cost)+sum(l.filter(t=>t.type==='out'))-sum(l.filter(t=>t.type==='in'))+xsum(k,v))};
+function goalOwn(g){const k='goal:'+g.id,l=linked(k,g);return Math.max(0,num(g.saved)+sum(l.filter(t=>t.type==='out'))-sum(l.filter(t=>t.type==='in'))+xsum(k,g))}
+const goalLinked=g=>sum((g.invs||[]).map(id=>S.invs.find(v=>v.id===id)).filter(Boolean),invVal);
+goalVal=function(g){return goalOwn(g)+goalLinked(g)};
+{const old=totals;totals=function(){const r=old();r.goals=sum(S.goals,goalOwn);r.net=r.goals+r.inv-r.debtTotal;return r}}
+ENT.goals.cur=goalOwn;
+ENT.goals.fields=g=>[
+  fld('ชื่อเป้าหมาย',`<input name="name" id="e-name" required value="${esc(g.name||'')}">`),
+  fld('ประเภท',`<select name="kind" id="e-kind">${opt('emergency','เงินสำรองฉุกเฉิน',g.kind)}${opt('goal','เป้าหมายทั่วไป',g.kind)}</select>`),
+  `<div class="two">${fld('เป้า (บาท)',`<input name="target" id="e-target" inputmode="decimal" class="num" value="${g.target??''}">`,g.kind==='emergency'?'แนะนำ 1 เดือนตอนมีหนี้, 3–6 เดือนเมื่อปลอดหนี้':'')}${fld('เงินที่มีอยู่แล้ว',`<input name="saved" id="e-saved" inputmode="decimal" class="num" value="${g.id?Math.round(goalOwn(g)):(g.saved??0)}">`,'ยอดตั้งต้น ไม่นับเป็นรายจ่าย')}</div>`,
+  S.invs.length?`<div class="fld"><span>เงินของเป้านี้เก็บอยู่ใน (นับรวมให้อัตโนมัติ)</span><div class="stack" style="gap:6px">${S.invs.map(v=>`<label class="chk"><input type="checkbox" name="gi_${v.id}" ${(g.invs||[]).includes(v.id)?'checked':''}> ${esc(v.name)} <span class="muted small num">${baht(invVal(v))}</span></label>`).join('')}</div><span class="hint">เช่น เงินสำรองฉุกเฉินเก็บในบัญชีออมทรัพย์ ติ๊กบัญชีนั้น แล้วใส่ "เงินที่มีอยู่แล้ว" เป็น 0 ยอดจะไม่ถูกนับซ้ำ</span></div>`:'',
+  fld('ภายในวันที่ (ไม่บังคับ)',`<input type="date" name="deadline" id="e-dl" value="${g.deadline||''}">`)];
+{const b=dbPut;dbPut=async function(s,o){if(s==='goals'&&o&&Object.keys(o).some(k=>k.startsWith('gi_'))){o.invs=Object.keys(o).filter(k=>k.startsWith('gi_')&&o[k]).map(k=>k.slice(3));Object.keys(o).filter(k=>k.startsWith('gi_')).forEach(k=>delete o[k])}return b(s,o)}}
+/* labels in the investment form */
+{const f=ENT.invs.fields;ENT.invs.fields=v=>f(v).map(x=>x.replace("'อัปเดตเดือนละครั้งจากแอปโบรกเกอร์'","'ยอดตั้งต้น/ยอดล่าสุด ไม่นับเป็นรายจ่าย'").replace('อัปเดตเดือนละครั้งจากแอปโบรกเกอร์','ยอดตั้งต้นหรือยอดล่าสุด ไม่นับเป็นรายจ่าย'))}
+/* money-in chooser */
+function accOpts(sel,excl){return[...S.goals.map(g=>['goal:'+g.id,'ออม: '+g.name]),...S.invs.map(v=>['inv:'+v.id,'ลงทุน: '+v.name])].filter(([k])=>k!==excl).map(([k,l])=>opt(k,l,sel)).join('')}
+function moneyIn(target,kind){const T=target||(kind==='inv'?(S.invs[0]?'inv:'+S.invs[0].id:''):(S.goals[0]?'goal:'+S.goals[0].id:''));
+  if(!T){toast('ยังไม่มีบัญชี เพิ่มก่อน');return kind==='inv'?A.addInv():A.addGoal()}
+  openSheet(`<h2>เพิ่มเงินเข้า</h2><div class="stack small"><label class="fld"><span>เข้าบัญชี/เป้าหมาย</span><select id="miT">${accOpts(T)}</select></label>
+   <button class="choice" data-act="miIncome"><b>ลงเงินเพิ่มจากรายได้</b><span>เงินจากเงินเดือน/รายได้เดือนนี้ นับเป็น "ออม/ลงทุน" ไม่ใช่ค่าใช้จ่าย</span></button>
+   <button class="choice" data-act="miMove"><b>ย้ายเงินจากบัญชีอื่นในแอป</b><span>เช่น ย้ายจากเงินฝากไปซื้อทอง ไม่นับเป็นรายรับหรือรายจ่าย</span></button>
+   <button class="choice" data-act="miSet"><b>มีเงินอยู่แล้ว / อัปเดตยอดให้ตรงจริง</b><span>ยอดตั้งต้น หรือมูลค่าขึ้นลงตามตลาด ไม่บันทึกเป็นรายจ่าย</span></button></div>
+   <div class="actions"><span></span><button class="btn soft" data-act="closeSheet">ยกเลิก</button></div>`)}
+function moveSheet(to,from){openSheet(`<h2>ย้ายเงินระหว่างบัญชี</h2><form class="f" id="mvF">
+  <label class="fld"><span>จาก</span><select id="mvFrom">${accOpts(from,to)}</select></label><label class="fld"><span>ไปที่</span><select id="mvTo">${accOpts(to)}</select></label>
+  <label class="fld"><span>จำนวนเงิน</span><input id="mvAmt" class="amtin num" inputmode="decimal" required placeholder="0"></label>
+  <label class="fld"><span>วันที่</span><input type="date" id="mvDate" value="${todayStr()}"></label><label class="fld"><span>โน้ต</span><input id="mvNote" placeholder="เช่น ซื้อทองเพิ่ม"></label>
+  <p class="hint" style="margin:0">ยอดต้นทางลด ยอดปลายทางเพิ่ม ไม่นับเป็นรายรับหรือรายจ่ายของเดือน</p>
+  <div class="actions"><button type="button" class="btn soft" data-act="closeSheet">ยกเลิก</button><button class="btn green">ย้ายเงิน</button></div></form>`,el=>el.querySelector('#mvF').onsubmit=async e=>{e.preventDefault();
+    const a=num($('#mvAmt').value),f=$('#mvFrom').value,t=$('#mvTo').value;if(!(a>0)){toast('ใส่จำนวนเงิน');return}if(!f||f===t){toast('เลือกบัญชีต้นทางและปลายทางให้ต่างกัน');return}
+    const pid=uid(),d=$('#mvDate').value||todayStr(),note=$('#mvNote').value.trim(),ts=Date.now();
+    await dbBulk('tx',[{id:pid+'a',pid,ts,type:'xfer',cat:'move',dir:-1,amount:a,date:d,link:f,note:note||('ย้ายไป '+linkName(t))},{id:pid+'b',pid,ts:ts+1,type:'xfer',cat:'move',dir:1,amount:a,date:d,link:t,note:note||('ย้ายจาก '+linkName(f))}]);
+    closeSheet();await afterTxChange([f,t]);toast('ย้ายเงินแล้ว')})}
+Object.assign(A,{
+  depGoal:d=>moneyIn('goal:'+d.id),
+  addTxCat:d=>d.v==='invest'?moneyIn(null,'inv'):openTx({type:'out',cat:d.v}),
+  miIncome:()=>{const t=$('#miT').value;closeSheet();openTx({type:'out',cat:t.startsWith('inv:')?'invest':'save',link:t})},
+  miMove:()=>{const t=$('#miT').value;closeSheet();moveSheet(t)},
+  miSet:()=>{const[k,id]=$('#miT').value.split(':');closeSheet();openEnt(k==='inv'?'invs':'goals',(k==='inv'?S.invs:S.goals).find(x=>x.id===id))},
+  setStart:()=>startSheet(),
+});
+/* transfers: display + edit/delete as a pair */
+{const old=txRow;txRow=function(t){if(t.type!=='xfer')return old(t);return`<button class="li" data-act="editXfer" data-id="${t.id}"><span class="ic" style="background:var(--lilac-soft);color:var(--lilac)">⇄</span><span class="t"><b>ย้ายเงิน${t.dir>0?'เข้า':'ออก'}</b><span>${esc(linkName(t.link))}${t.note?' · '+esc(t.note):''}</span></span><span class="amt num" style="color:var(--lilac)">${t.dir>0?'+':'−'}${money(t.amount)}</span><span class="edit-ic" aria-hidden="true">✎</span></button>`}}
+A.editXfer=async d=>{const t=await dbGet('tx',d.id);if(!t)return;closeSheet();const pair=(await dbAll('tx')).filter(x=>x.pid&&x.pid===t.pid);
+  openSheet(`<h2>ย้ายเงิน ${baht(t.amount)}</h2><p class="small muted">${fmtDate(t.date)} · ${esc(pair.map(x=>(x.dir>0?'เข้า ':'ออก ')+linkName(x.link)).join(' → '))}</p><div class="actions"><button class="btn danger" id="xDel">ลบรายการย้ายเงิน</button><button class="btn soft" data-act="closeSheet">ปิด</button></div>`,el=>el.querySelector('#xDel').onclick=async()=>{for(const x of pair.length?pair:[t])await dbDel('tx',x.id);closeSheet();await afterTxChange(pair.map(x=>x.link));toast('ลบแล้ว')})};
+/* starting balances in one place */
+function startSheet(){const rows=[...S.goals.filter(g=>!(g.invs||[]).length).map(g=>['goals',g,g.name,'ออม',goalOwn(g)]),...S.invs.map(v=>['invs',v,v.name,'ลงทุน',invVal(v)])];
+  openSheet(`<h2>ตั้งยอดเงินที่มีอยู่แล้ว</h2><p class="small muted" style="margin:0 0 8px">ใช้ตอนเริ่มใช้แอป หรือเมื่อยอดในแอปไม่ตรงกับบัญชีจริง ยอดนี้<b>ไม่นับเป็นรายจ่าย</b>และไม่กระทบรายรับเดือนนี้</p>
+   ${rows.length?`<div class="stack">${rows.map(([s,e,n,k,v],i)=>`<label class="row"><span class="grow small"><span class="chip">${k}</span> ${esc(n)}</span><input class="pin num" style="width:120px" inputmode="decimal" id="st${i}" value="${Math.round(v)}"></label>`).join('')}</div>`:'<p class="small">ยังไม่มีเป้าออมหรือการลงทุน</p>'}
+   <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn sm soft" data-act="addGoal">+ เป้าออม</button><button class="btn sm soft" data-act="addInv">+ การลงทุน</button></div>
+   <div class="actions"><button class="btn soft" data-act="closeSheet">ยกเลิก</button><button class="btn green" id="stGo">บันทึกยอด</button></div>`,el=>el.querySelector('#stGo')?.addEventListener('click',async()=>{
+    for(let i=0;i<rows.length;i++){const[s,e,,,cur]=rows[i];const nv=num($('#st'+i).value);if(Math.round(nv)===Math.round(cur))continue;
+      const rec={...e,asOf:todayStr(),balTs:Date.now()};if(s==='goals')rec.saved=nv;else{const c=invCost(e);rec.value=nv;rec.cost=c>0?c:nv}
+      await dbPut(s,rec);const arr=S[s];arr[arr.findIndex(x=>x.id===e.id)]=rec}
+    await loadEntities();closeSheet();render();toast('บันทึกยอดแล้ว')}))}
+/* grow page: entry buttons + clearer copy */
+{const old=renderGrow;renderGrow=function(){let h=old();
+  h=h.replace('<div class="sec"><div class="seg"',`<div class="sec"><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm soft" data-act="setStart">ตั้งยอดเงินที่มีอยู่แล้ว</button><button class="btn sm soft" data-act="miMoveAny">ย้ายเงินระหว่างบัญชี</button></div></div><div class="sec"><div class="seg"`);
+  h=h.replace('>บันทึกเงินลงทุนเพิ่ม<','>เพิ่มเงิน / ย้ายเงิน<').replace(/>หยอดเงิน</g,'>เพิ่มเงิน<');
+  S.goals.forEach(g=>{if((g.invs||[]).length){const names=g.invs.map(id=>S.invs.find(v=>v.id===id)?.name).filter(Boolean).join(', ');h=h.replace(`<b>${esc(g.name)}</b>`,`<b>${esc(g.name)}</b><span class="chip" style="margin-left:6px">ผูกกับ ${esc(names)}</span>`)}});
+  return h}}
+A.miMoveAny=()=>moveSheet();
+/* home: "ใช้จ่าย" excludes money put into savings/investments */
+{const old=renderHome;renderHome=function(){let h=old();const a=agg(S.monthTx);const spend=a.out-a.grp.save;
+  return h.replace(`<div class="l">รายจ่าย ›</div><div class="v num">${baht(a.out)}</div>`,`<div class="l">ใช้จ่าย ›</div><div class="v num">${baht(spend)}</div>${a.grp.save?`<div class="tiny" style="color:var(--sun)">+ ออม ${baht(a.grp.save)}</div>`:''}`)}}
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
