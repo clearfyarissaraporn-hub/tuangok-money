@@ -382,6 +382,15 @@ details.rawtxt{font-size:12px;color:var(--muted)}details.rawtxt pre{white-space:
 .qrbox{background:#fff;border-radius:20px;padding:12px;width:220px;box-shadow:0 0 24px rgba(98,232,255,.4)}.qrbox img{width:100%;display:block;image-rendering:pixelated}
 pre.shmsg{white-space:pre-wrap;font-family:inherit;font-size:13px;margin:0}
 #instBar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:65;display:flex;gap:10px;align-items:center;max-width:576px;margin:0 auto;background:linear-gradient(180deg,#3A2780,#2A1A62);border:1px solid rgba(255,170,240,.45);border-radius:16px;padding:10px 12px;box-shadow:0 10px 28px rgba(0,0,0,.45)}#instBar img{width:40px;height:40px;border-radius:10px}#instBar .grow{flex:1;min-width:0;font-size:14px}
+.gauge-card{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center;background:linear-gradient(160deg,rgba(94,240,184,.18),rgba(98,232,255,.06)),var(--surface)!important}
+.gauge svg{width:150px;height:150px;display:block}.g-big{font-family:var(--f-display);font-size:38px;font-weight:700;fill:#fff}.g-sm{font-size:12px;fill:var(--muted)}
+.gauge-tx{display:grid;gap:6px;min-width:0}.gauge-tx b{font-family:var(--f-display);font-size:17px;line-height:1.3}
+.badges{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.badge{border-radius:16px;padding:12px 10px;display:grid;gap:2px;text-align:center;box-shadow:var(--shadow)}
+.badge b{font-family:var(--f-display);font-size:26px;color:#1B0F45}.badge span{font-size:11.5px;color:#2A1A62;line-height:1.3;font-weight:600}
+.b1{background:linear-gradient(160deg,#8CF7D4,#3FD3A3)}.b2{background:linear-gradient(160deg,#FFE98A,#FFC93D)}.b3{background:linear-gradient(160deg,#FFB3DD,#FF6FB5)}
+.stackbar.big{height:26px;border-radius:12px}
+.pgrid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pgrid2>div{display:grid;grid-template-columns:12px 1fr auto;gap:2px 8px;align-items:center;font-size:13px}.pgrid2 .tiny{grid-column:2/4}
+@media (max-width:420px){.gauge-card{grid-template-columns:120px 1fr}.gauge svg{width:120px;height:120px}}
 </style>
 </head><body>
 <div id="sky" aria-hidden="true"></div>
@@ -519,7 +528,7 @@ function avatar(o={}){const c=S.meta.char||{};const k=c.kind||'bean';
 /* ========== state ========== */
 const now=new Date();
 const S={tab:'home',y:now.getFullYear(),m:now.getMonth(),debts:[],cards:[],invs:[],ins:[],goals:[],recur:[],meta:{},monthTx:[],ent:{},
-  sub:{debt:'debts',grow:'goals',list:'big',more:'about'},drill:{g:null,c:null},selDay:null,prevTx:[],search:'',searchRes:null,plan:{strat:'avalanche',extra:null},studio:{mood:'happy'},persist:true};
+  sub:{debt:'debts',grow:'goals',list:'chart',more:'about'},drill:{g:null,c:null},selDay:null,prevTx:[],search:'',searchRes:null,plan:{strat:'avalanche',extra:null},studio:{mood:'happy'},persist:true};
 const defaultMeta=()=>({id:'settings',name:'',income:0,planKey:'debtor',plan:{...PLANS.debtor.p},char:{kind:'nurse',color:MASCOT_COLORS[1],acc:'nurse',name:'Clear พยาบาล',anim:'float'},extraRule:{debt:50,save:30,spend:20},peakDebt:0,demo:false,started:todayStr()});
 
 /* ========== loading ========== */
@@ -1243,9 +1252,10 @@ document.addEventListener('change',async e=>{const t=e.target;if(t.id!=='charInO
 /* ========== ANALYSIS (big picture → detail) ========== */
 const GCOL=g=>GROUPS[g].c;
 function renderList(){
-  let h=`<div class="sec">${seg('list',[['big','ภาพใหญ่'],['drill','เจาะลึก'],['daily','รายวัน'],['year','12 เดือน'],['years','รายปี'],['list','รายการ']])}</div>`;
+  let h=`<div class="sec">${seg('list',[['chart','กราฟ'],['big','ภาพใหญ่'],['drill','เจาะลึก'],['daily','รายวัน'],['year','12 เดือน'],['years','รายปี'],['list','รายการ']])}</div>`;
   const sub=S.sub.list;
   if(sub==='list'||sub==='year'){S.sub.list=sub;const o=renderListOld();return h+o.replace(/^<div class="sec">[\s\S]*?<\/div><\/div>/,'')}
+  if(sub==='chart')return h+chartShell();
   if(sub==='drill')return h+drillHTML();
   if(sub==='daily')return h+dailyHTML();
   if(sub==='years')return h+yearsShell();
@@ -2190,7 +2200,7 @@ document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id
 /* Claude path: force mode on results too */
 {const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
 /* ========== save indicator + in-app version update ========== */
-const APP_V=22;
+const APP_V=23;
 {const h=$('.top-in');if(h&&!$('#saveBtn'))$('#bell').insertAdjacentHTML('beforebegin',`<button class="savebtn" id="saveBtn" data-act="saveInfo" aria-label="สถานะการบันทึก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><i id="saveDot"></i></button>`)}
 let lastSave=Date.now(),saveFlash;
 function markSaved(){lastSave=Date.now();const b=$('#saveBtn');if(!b)return;b.classList.remove('saved');void b.offsetWidth;b.classList.add('saved');clearTimeout(saveFlash);saveFlash=setTimeout(()=>b.classList.remove('saved'),1600);updSaveDot()}
@@ -2274,6 +2284,70 @@ Object.assign(A,{
 setTimeout(()=>{if(IS_WEB&&!isStandalone()&&!deferredInstall)showInstallBar()},6000);
 /* install entry in the save sheet and about page */
 {const old=A.saveInfo;A.saveInfo=function(){old();if(IS_WEB&&!isStandalone()){const a=$('#sheetRoot .sheet .actions');if(a)a.insertAdjacentHTML('beforebegin','<button class="btn green" data-act="installApp" style="width:100%;margin-top:8px">ติดตั้งแอปลงมือถือ</button>')}}}
+/* ========== Charts dashboard: month & year bars, savings rate, cumulative wealth built ========== */
+const C_IN='#5EF0B8',C_OUT='#FF6FB5',C_SAVE='#FFD84D',C_DEBT='#7FB8FF',C_LEFT='#C49BFF';
+function chartShell(){setTimeout(fillCharts,0);return`<div id="chartBox"><div class="sec"><div class="card"><p class="muted small" style="margin:0">กำลังวาดกราฟ…</p></div></div></div>`}
+const kfmt=v=>{const a=Math.abs(v);return(v<0?'-':'')+(a>=1e6?(a/1e6).toFixed(1)+'M':a>=1e3?(a/1e3).toFixed(a>=1e5?0:1)+'k':Math.round(a))};
+function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return(n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p}
+async function fillCharts(){const box=$('#chartBox');if(!box)return;
+  const end=new Date(S.y,S.m,1);const start=new Date(S.y,S.m-11,1);const all=await dbAll('tx');
+  const inRange=all.filter(t=>t.date>=ymd(start)&&t.date<=monthBounds(S.y,S.m)[1]);
+  const months=[];for(let i=0;i<12;i++){const d=new Date(start.getFullYear(),start.getMonth()+i,1);const k=d.getFullYear()+'-'+pad(d.getMonth()+1);const a=agg(inRange.filter(t=>t.date.startsWith(k)));
+    const build=a.grp.save+a.grp.debt;months.push({y:d.getFullYear(),m:d.getMonth(),inc:a.inc,out:a.out,save:a.grp.save,debt:a.grp.debt,build,left:a.inc-a.out,rate:a.inc>0?build/a.inc:null})}
+  const cur=months[11],has=months.filter(x=>x.inc||x.out);
+  if(!has.length){box.innerHTML=empty('ยังไม่มีข้อมูลให้วาดกราฟ จดรายการแรกก่อน','เพิ่มรายการ','addTx');return}
+  // streak of months with money left (from latest backwards)
+  let streak=0;for(let i=11;i>=0;i--){const x=months[i];if(!(x.inc||x.out))break;if(x.left>=0)streak++;else break}
+  const yearBuild=sum(months.filter(x=>x.y===S.y),x=>x.build);const best=has.reduce((b,x)=>x.rate!=null&&(b==null||x.rate>b.rate)?x:b,null);
+  const rate=cur.rate??0,goal=.2,pct=Math.round(rate*100);
+  const tier=rate>=.3?['ยอดเยี่ยม! สร้างเนื้อสร้างตัวได้เกิน 30%','#5EF0B8']:rate>=.2?['ถึงเป้า 20% แล้ว เก่งมาก','#5EF0B8']:rate>=.1?['มาถูกทาง อีกนิดถึง 20%','#FFD84D']:rate>0?['เริ่มแล้ว ทุกบาทที่ออมและโปะหนี้คือความคืบหน้า','#FFD84D']:['เดือนนี้ยังไม่ได้ออมหรือโปะหนี้ ลองเริ่มวันละนิด','#FF8FB0'];
+  // gauge
+  const R=70,CIRC=2*Math.PI*R,fill=Math.min(1,rate/0.5);
+  let h=`<div class="sec"><div class="card gauge-card"><div class="gauge"><svg viewBox="0 0 180 180"><defs><linearGradient id="gg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#FFD84D"/><stop offset=".5" stop-color="#5EF0B8"/><stop offset="1" stop-color="#62E8FF"/></linearGradient></defs>
+    <circle cx="90" cy="90" r="${R}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="18"/>
+    <circle cx="90" cy="90" r="${R}" fill="none" stroke="url(#gg)" stroke-width="18" stroke-linecap="round" stroke-dasharray="${CIRC*fill} ${CIRC}" transform="rotate(-90 90 90)" style="filter:drop-shadow(0 0 8px rgba(94,240,184,.6))"/>
+    <circle cx="${90+R*Math.cos(2*Math.PI*goal/0.5-Math.PI/2)}" cy="${90+R*Math.sin(2*Math.PI*goal/0.5-Math.PI/2)}" r="5" fill="#fff"/>
+    <text x="90" y="88" text-anchor="middle" class="g-big">${pct}%</text><text x="90" y="112" text-anchor="middle" class="g-sm">ของรายรับ</text></svg></div>
+    <div class="gauge-tx"><span class="lvl">อัตราสร้างเนื้อสร้างตัว ${fmtMonth(cur.y,cur.m)}</span><b style="color:${tier[1]}">${tier[0]}</b>
+    <span class="small muted">ออม/ลงทุน ${baht(cur.save)} + ผ่อนหนี้ ${baht(cur.debt)} = <b style="color:var(--ink)">${baht(cur.build)}</b></span><span class="tiny muted">จุดขาวบนวง = เป้า 20% · วงเต็ม = 50%</span></div></div></div>`;
+  h+=`<div class="sec"><div class="badges"><div class="badge b1"><b>${streak}</b><span>เดือนติดกัน<br>ที่มีเงินเหลือ</span></div><div class="badge b2"><b>${kfmt(yearBuild)}</b><span>สร้างได้ปี ${S.y+543}<br>(ออม+ผ่อนหนี้)</span></div><div class="badge b3"><b>${best?Math.round(best.rate*100)+'%':'–'}</b><span>เดือนที่ดีที่สุด<br>${best?TH_M[best.m]:''}</span></div></div></div>`;
+  // monthly bars + rate line
+  const W=360,Hh=200,top=18,base=160,left=40,step=(W-left-6)/12,bw=step*.32;const mx=niceMax(Math.max(...months.map(x=>Math.max(x.inc,x.out))));
+  const yv=v=>base-(v/mx)*(base-top);const ry=r=>base-Math.min(1,Math.max(0,r)/0.5)*(base-top);
+  let g='';[0,.5,1].forEach(f=>{const y=yv(mx*f);g+=`<line x1="${left}" x2="${W-4}" y1="${y}" y2="${y}" stroke="rgba(255,255,255,${f?0.08:0.2})"/><text x="${left-4}" y="${y+4}" text-anchor="end">${kfmt(mx*f)}</text>`});
+  let bars='',pts=[];months.forEach((x,i)=>{const cx=left+step*i+step/2;const isCur=i===11;
+    bars+=`<g data-act="goMonth" data-y="${x.y}" data-m="${x.m}" style="cursor:pointer"><rect x="${cx-step/2}" y="${top}" width="${step}" height="${base-top+22}" fill="transparent"/>
+    <rect x="${cx-bw-1}" y="${yv(x.inc)}" width="${bw}" height="${base-yv(x.inc)}" rx="3" fill="${C_IN}" opacity="${isCur?1:.85}"/><rect x="${cx+1}" y="${yv(x.out)}" width="${bw}" height="${base-yv(x.out)}" rx="3" fill="${C_OUT}" opacity="${isCur?1:.85}"/>
+    <text x="${cx}" y="${base+14}" text-anchor="middle" ${isCur?'style="fill:#fff;font-weight:700"':''}>${TH_M[x.m].replace('.','')}</text></g>`;if(x.rate!=null)pts.push([cx,ry(x.rate),x.rate])});
+  const line=pts.length>1?`<polyline points="${pts.map(p=>p[0]+','+p[1]).join(' ')}" fill="none" stroke="${C_SAVE}" stroke-width="2.5" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px rgba(255,216,77,.7))"/>`:'';
+  const dots=pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="${C_SAVE}"/>`).join('');const lp=pts[pts.length-1];
+  h+=`<div class="sec"><div class="card stack"><div class="row between"><b>รายรับ–รายจ่าย 12 เดือน</b><span class="tiny muted">แตะแท่งเพื่อดูรายการ</span></div>
+   <div class="chart"><svg viewBox="0 0 ${W} ${Hh}">${g}${bars}${line}${dots}${lp?`<text x="${lp[0]}" y="${lp[1]-8}" text-anchor="middle" style="fill:${C_SAVE};font-weight:700">${Math.round(lp[2]*100)}%</text>`:''}</svg></div>
+   <div class="legend"><span><i class="dot" style="background:${C_IN}"></i>รายรับ</span><span><i class="dot" style="background:${C_OUT}"></i>รายจ่าย</span><span><i class="dot" style="background:${C_SAVE}"></i>% สร้างเนื้อสร้างตัว</span></div></div></div>`;
+  // cumulative wealth built (area)
+  let acc=0;const cum=months.map(x=>acc+=x.build);const cmx=niceMax(acc||1);const cy=v=>150-(v/cmx)*120;
+  const cp=months.map((x,i)=>[left+step*i+step/2,cy(cum[i])]);
+  h+=`<div class="sec"><div class="card stack"><div class="row between"><b>สร้างเนื้อสร้างตัวสะสม 12 เดือน</b><b class="num" style="color:${C_IN}">${baht(acc)}</b></div>
+   <div class="chart"><svg viewBox="0 0 ${W} 175"><defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${C_IN}" stop-opacity=".55"/><stop offset="1" stop-color="${C_IN}" stop-opacity="0"/></linearGradient></defs>
+   <line x1="${left}" x2="${W-4}" y1="150" y2="150" stroke="rgba(255,255,255,.2)"/><text x="${left-4}" y="34" text-anchor="end">${kfmt(cmx)}</text>
+   <path d="M${cp[0][0]},150 L${cp.map(p=>p.join(',')).join(' L')} L${cp[11][0]},150Z" fill="url(#ga)"/><polyline points="${cp.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${C_IN}" stroke-width="3" stroke-linejoin="round"/>
+   <circle cx="${cp[11][0]}" cy="${cp[11][1]}" r="6" fill="#fff" stroke="${C_IN}" stroke-width="3"/>
+   ${months.map((x,i)=>i%2===1?`<text x="${cp[i][0]}" y="166" text-anchor="middle">${TH_M[x.m].replace('.','')}</text>`:'').join('')}</svg></div>
+   <p class="small muted" style="margin:0">ทุกบาทที่ออม ลงทุน และผ่อนหนี้ ทำให้ฐานะดีขึ้นจริง เส้นนี้ควรขึ้นทุกเดือน แม้ช้าก็ยังดี</p></div></div>`;
+  // where this month's income went (stacked bar)
+  const parts=[['ใช้จ่าย',Math.max(0,cur.out-cur.build),C_OUT],['ผ่อนหนี้',cur.debt,C_DEBT],['ออม/ลงทุน',cur.save,C_SAVE],['เงินเหลือ',Math.max(0,cur.left),C_IN]].filter(p=>p[1]>0);const pt=sum(parts,p=>p[1]);
+  if(pt)h+=`<div class="sec"><div class="card stack"><b>เงินเดือนนี้ไปไหน</b><div class="stackbar big">${parts.map(p=>`<i style="flex:${p[1]};background:${p[2]}"></i>`).join('')}</div>
+   <div class="pgrid2">${parts.map(p=>`<div><i class="dot" style="background:${p[2]}"></i><span>${p[0]}</span><b class="num">${Math.round(p[1]/pt*100)}%</b><span class="tiny muted num">${baht(p[1])}</span></div>`).join('')}</div></div></div>`;
+  // yearly
+  const byY={};all.forEach(t=>{(byY[t.date.slice(0,4)]=byY[t.date.slice(0,4)]||[]).push(t)});const ys=Object.keys(byY).sort().slice(-5);
+  const yr=ys.map(y=>{const a=agg(byY[y]);return{y:+y,inc:a.inc,out:a.out,build:a.grp.save+a.grp.debt}});const ymx=niceMax(Math.max(1,...yr.map(x=>Math.max(x.inc,x.out))));
+  const ystep=(W-left-6)/Math.max(yr.length,3),ybw=Math.min(22,ystep*.22);const yy=v=>150-(v/ymx)*125;
+  h+=`<div class="sec"><div class="card stack"><b>รายปี</b><div class="chart"><svg viewBox="0 0 ${W} 180"><line x1="${left}" x2="${W-4}" y1="150" y2="150" stroke="rgba(255,255,255,.2)"/><text x="${left-4}" y="29" text-anchor="end">${kfmt(ymx)}</text>
+   ${yr.map((x,i)=>{const cx=left+ystep*i+ystep/2;return`<g data-act="selYearChart" data-v="${x.y}" style="cursor:pointer"><rect x="${cx-ybw*1.5-2}" y="${yy(x.inc)}" width="${ybw}" height="${150-yy(x.inc)}" rx="4" fill="${C_IN}"/><rect x="${cx-ybw/2}" y="${yy(x.out)}" width="${ybw}" height="${150-yy(x.out)}" rx="4" fill="${C_OUT}"/><rect x="${cx+ybw/2+2}" y="${yy(x.build)}" width="${ybw}" height="${150-yy(x.build)}" rx="4" fill="${C_SAVE}"/>
+     <text x="${cx}" y="166" text-anchor="middle">${x.y+543}</text><text x="${cx+ybw+2}" y="${yy(x.build)-5}" text-anchor="middle" style="fill:${C_SAVE};font-weight:700">${x.inc?Math.round(x.build/x.inc*100)+'%':''}</text></g>`}).join('')}</svg></div>
+   <div class="legend"><span><i class="dot" style="background:${C_IN}"></i>รายรับ</span><span><i class="dot" style="background:${C_OUT}"></i>รายจ่าย</span><span><i class="dot" style="background:${C_SAVE}"></i>ออม+ผ่อนหนี้ (%)</span></div></div></div>`;
+  box.innerHTML=h}
+Object.assign(A,{selYearChart:d=>{S.selYear=+d.v;S.sub.list='years';render()}});
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
