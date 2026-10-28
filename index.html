@@ -392,6 +392,7 @@ pre.shmsg{white-space:pre-wrap;font-family:inherit;font-size:13px;margin:0}
 .pgrid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pgrid2>div{display:grid;grid-template-columns:12px 1fr auto;gap:2px 8px;align-items:center;font-size:13px}.pgrid2 .tiny{grid-column:2/4}
 @media (max-width:420px){.gauge-card{grid-template-columns:120px 1fr}.gauge svg{width:120px;height:120px}}
 .choice{display:grid;gap:3px;text-align:left;border:1px solid rgba(255,170,240,.3);background:rgba(0,0,0,.2);color:var(--ink);border-radius:14px;padding:12px 14px;cursor:pointer;font:inherit}.choice b{font-size:15px}.choice span{font-size:12.5px;color:var(--muted)}.choice:active{background:rgba(255,95,203,.15)}
+.daylist .dayg{border-top:1px solid var(--line)}.daylist .dayg:first-child{border-top:0}.dayg summary{list-style:none;display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}.dayg summary::-webkit-details-marker{display:none}.dayg .dd{display:grid;place-items:center;min-width:44px;height:44px;border-radius:14px;background:rgba(255,95,203,.16);line-height:1.05}.dayg .dd b{font-size:17px}.dayg .dd i{font-style:normal;font-size:10px;color:var(--muted)}.dayg .grow{display:grid;gap:2px;flex:1;min-width:0}.dayg .dsum{display:grid;text-align:right;gap:2px}.dayg .chev{color:var(--muted);transition:transform .2s;font-size:18px}.dayg[open] .chev{transform:rotate(90deg)}.dayg[open] summary{background:rgba(255,255,255,.04)}.dayl{background:rgba(0,0,0,.14)}.dayl .li:first-child{border-top:1px solid var(--line)}
 </style>
 </head><body>
 <div id="sky" aria-hidden="true"></div>
@@ -2201,7 +2202,7 @@ document.addEventListener('change',e=>{const id=e.target.id;if(id!=='scanIn'&&id
 /* Claude path: force mode on results too */
 {const old=readSlips;readSlips=async function(files){const r=await old(files);r.items=r.items.map(x=>{if(/_balance$/.test(x.type))return x;const p=forceMode({...x});return p});return r}}
 /* ========== save indicator + in-app version update ========== */
-const APP_V=25;
+const APP_V=26;
 {const h=$('.top-in');if(h&&!$('#saveBtn'))$('#bell').insertAdjacentHTML('beforebegin',`<button class="savebtn" id="saveBtn" data-act="saveInfo" aria-label="สถานะการบันทึก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><i id="saveDot"></i></button>`)}
 let lastSave=Date.now(),saveFlash;
 function markSaved(){lastSave=Date.now();const b=$('#saveBtn');if(!b)return;b.classList.remove('saved');void b.offsetWidth;b.classList.add('saved');clearTimeout(saveFlash);saveFlash=setTimeout(()=>b.classList.remove('saved'),1600);updSaveDot()}
@@ -2452,6 +2453,25 @@ const CP_RE=/ชำระบัตรเครดิต|จ่ายบัตร
   const d=parse(cp[0].date||todayStr());closeSheet();await loadEntities();
   if(typeof goMonth==='function'&&(d.getFullYear()!==S.y||d.getMonth()!==S.m))goMonth(d.getFullYear(),d.getMonth());
   await afterTxChange(keys);toast(`บันทึกจ่ายบัตรแล้ว ${n} รายการ · ยอดบัตรลดลงแล้ว`)}}
+/* v26: "ล่าสุด" ย้ายมาใต้ปุ่มสแกน + จัดกลุ่มรายวัน กดดูรายละเอียดแต่ละวันได้ */
+{const old=slipCard;slipCard=function(){return old()+'<!--slipEnd-->'}}
+function dayGroupsHTML(){const tx=S.monthTx||[];
+  const head=`<div class="sec-h"><h2>ล่าสุด · รายวัน</h2><span class="row" style="gap:12px"><button class="linkbtn" data-act="dailyCal">ปฏิทิน</button><button class="linkbtn" data-act="tab" data-v="list">ดูทั้งหมด</button></span></div>`;
+  if(!tx.length)return`<div class="sec">${head}${empty('ยังไม่มีรายการในเดือนนี้','จดรายการแรก','addTx')}</div>`;
+  const by={};tx.forEach(t=>(by[t.date]=by[t.date]||[]).push(t));
+  const days=Object.keys(by).sort().reverse();const show=days.slice(0,S.dayMore?31:5);
+  const rows=show.map((d,i)=>{const L=by[d].slice().sort((a,b)=>(b.ts||0)-(a.ts||0));const o=sum(L.filter(t=>t.type==='out')),inc=sum(L.filter(t=>t.type==='in')),p=sum(L.filter(t=>t.type==='pay'));
+    const dt=parse(d);const lbl=d===todayStr()?'วันนี้':TH_D[dt.getDay()];
+    return`<details class="dayg" ${i===0||S.dayOpen===d?'open':''}><summary><span class="dd"><b>${dt.getDate()}</b><i>${lbl}</i></span><span class="grow"><b>${fmtDate(d)}</b><span class="small muted">${L.length} รายการ${p?' · จ่ายบัตร '+baht(p):''}</span></span><span class="dsum">${o?`<b class="num">−${baht(o).replace('฿','฿')}</b>`:''}${inc?`<span class="num" style="color:var(--good)">+${baht(inc)}</span>`:''}</span><span class="chev">›</span></summary><div class="dayl">${L.map(txRow).join('')}</div></details>`}).join('');
+  return`<div class="sec">${head}<div class="list daylist">${rows}</div>${days.length>5?`<button class="linkbtn" style="margin-top:8px" data-act="dayMore">${S.dayMore?'ย่อ':'ดูเพิ่ม ('+days.length+' วัน)'}</button>`:''}<p class="hint" style="margin:6px 0 0">แตะวันที่เพื่อดูรายละเอียด · แตะรายการเพื่อแก้ไข</p></div>`}
+{const base=renderHome;renderHome=function(){let h=base();
+  const s=h.indexOf('<div class="sec"><div class="sec-h"><h2>ล่าสุด</h2>');
+  if(s>=0){
+    let i=s,dep=0;const re=/<div\b|<\/div>/g;re.lastIndex=s;let m;while((m=re.exec(h))){dep+=m[0]==='</div>'?-1:1;if(dep===0){i=m.index+6;break}}
+    h=h.slice(0,s)+h.slice(i)}
+  const k=h.indexOf('<!--slipEnd-->');const sec=dayGroupsHTML();
+  return k>=0?h.slice(0,k)+sec+h.slice(k):h+sec}}
+Object.assign(A,{dayMore:()=>{S.dayMore=!S.dayMore;render()},dailyCal:()=>{S.tab='list';S.sub.list='daily';window.scrollTo(0,0);render()}});
 </script>
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body></html>
